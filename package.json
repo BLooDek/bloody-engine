@@ -1,17 +1,29 @@
 {
   "name": "bloody-engine",
   "version": "1.0.0",
-  "description": "",
-  "main": "dist/index.js",
+  "description": "A WebGL-based graphics engine",
+  "main": "dist/node/index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/web/index.js",
+      "require": "./dist/node/index.js",
+      "types": "./dist/web/index.d.ts"
+    }
+  },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch",
-    "start": "npm run build && node dist/index.js"
+    "dev": "vite",
+    "build": "npm run build:web && npm run build:node",
+    "build:web": "vite build --config vite.config.web.ts",
+    "build:node": "vite build --config vite.config.node.ts",
+    "preview": "vite preview",
+    "start": "npm run build:node && node dist/node/index.js"
   },
   "devDependencies": {
+    "@types/node": "^20.10.6",
     "@types/gl": "^6.0.5",
-    "esbuild": "^0.19.0",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.3",
+    "vite": "^5.0.8"
   },
   "dependencies": {
     "gl": "^8.1.6"
