@@ -10,7 +10,8 @@ export default defineConfig({
       formats: ["es"],
     },
     rollupOptions: {
-      external: ["gl"],
+      // Keep Node.js dependencies external for Node builds
+      external: ["gl", "@kmamal/sdl", "fs", "path", "os"],
       output: {
         format: "es",
         entryFileNames: "[name].js",

@@ -12,7 +12,16 @@ export default defineConfig({
       fileName: (format) => `index.${format === "es" ? "js" : "umd.js"}`,
     },
     rollupOptions: {
-      external: [],
+      // Externalize Node.js-only dependencies for browser builds
+      external: [
+        "@kmamal/sdl",
+        "gl",
+        "fs",
+        "path",
+        "os",
+        "events",
+        "child_process",
+      ],
       output: {
         globals: {},
       },

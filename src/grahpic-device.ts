@@ -1,5 +1,6 @@
 import type { RenderingContext } from "./rendering-context";
 import { RenderingContextFactory } from "./rendering-context-factory";
+import { Shader } from "./shader";
 
 /**
  * Graphics device that manages rendering context and WebGL operations
@@ -85,5 +86,20 @@ export class GraphicsDevice {
    */
   dispose(): void {
     this.context.dispose();
+  }
+
+  /**
+   * Create a shader program
+   * @param vertexSource Vertex shader source code
+   * @param fragmentSource Fragment shader source code
+   * @returns Compiled and linked shader program
+   */
+  createShader(vertexSource: string, fragmentSource: string): Shader {
+    return new Shader(
+      this.context.glContext,
+      vertexSource,
+      fragmentSource,
+      this.context.isBrowser,
+    );
   }
 }
