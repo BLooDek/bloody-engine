@@ -18,3 +18,6 @@ export { Texture } from "./texture";
 
 // Buffer management
 export { VertexBuffer, IndexBuffer } from "./buffer";
+// Batch rendering
+export { BatchRenderer } from "./batch-renderer";
+export type { QuadInstance } from "./batch-renderer";
