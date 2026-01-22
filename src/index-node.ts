@@ -41,6 +41,7 @@ attribute vec2 aTexCoord;
 varying vec2 vTexCoord;
 
 uniform mat4 uMatrix;
+uniform vec3 uColor;
 
 void main() {
   gl_Position = uMatrix * vec4(aPosition, 1.0);
@@ -51,9 +52,12 @@ void main() {
 const fragmentShaderSource = `
 varying vec2 vTexCoord;
 uniform sampler2D uTexture;
+uniform vec3 uColor;
 
 void main() {
-  gl_FragColor = texture2D(uTexture, vTexCoord);
+  // Use texture * color overlay for better visibility
+  vec4 texColor = texture2D(uTexture, vTexCoord);
+  gl_FragColor = vec4(texColor.rgb * uColor, texColor.a);
 }
 `;
 
@@ -110,6 +114,34 @@ void main() {
     const vertexBuffer = new VertexBuffer(gl, quadVertices, 5 * 4);
     console.log(
       `✓ Vertex buffer created (${vertexBuffer.getVertexCount()} vertices)`,
+    );
+
+    // Create triangle geometry
+    // Triangle: 3 vertices
+    // Position (x, y, z) + TexCoord (u, v)
+    const triangleVertices = new Float32Array([
+      // Position               TexCoord
+      0.0,
+      0.5,
+      0.0,
+      0.5,
+      1.0, // Top
+      -0.5,
+      -0.5,
+      0.0,
+      0.0,
+      0.0, // Bottom-left
+      0.5,
+      -0.5,
+      0.0,
+      1.0,
+      0.0, // Bottom-right
+    ]);
+
+    // Create triangle buffer
+    const triangleBuffer = new VertexBuffer(gl, triangleVertices, 5 * 4);
+    console.log(
+      `✓ Triangle buffer created (${triangleBuffer.getVertexCount()} vertices)`,
     );
 
     // Create a colorful gradient texture
@@ -257,10 +289,134 @@ void main() {
         }
 
         const frameStartTime = Date.now();
+        const elapsedSeconds = (frameCount * frameTimeMs) / 1000;
 
-        // Re-render frame
-        gdevice.clear({ r: 0.2, g: 0.2, b: 0.2, a: 1.0 });
-        gl.drawArrays(gl.TRIANGLES, 0, vertexBuffer.getVertexCount());
+        // Clear with animated background color
+        const bgR = 0.1 + 0.1 * Math.sin(elapsedSeconds);
+        const bgG = 0.1 + 0.1 * Math.cos(elapsedSeconds * 0.7);
+        const bgB = 0.15 + 0.1 * Math.sin(elapsedSeconds * 0.5);
+        gdevice.clear({ r: bgR, g: bgG, b: bgB, a: 1.0 });
+
+        // Render multiple animated quads
+        const numQuads = 3;
+        const quadScale = 0.4;
+        const quadColors = [
+          [1.0, 0.2, 0.2], // Red
+          [0.2, 1.0, 0.2], // Green
+          [0.2, 0.2, 1.0], // Blue
+        ];
+
+        for (let i = 0; i < numQuads; i++) {
+          // Calculate quad position and rotation
+          const angle = (i / numQuads) * Math.PI * 2 + elapsedSeconds * 0.5;
+          const radius = 0.5 + 0.2 * Math.sin(elapsedSeconds * 0.3 + i);
+          const posX = radius * Math.cos(angle);
+          const posY = radius * Math.sin(angle);
+          const rotation = elapsedSeconds + (i * Math.PI * 2) / numQuads;
+
+          // Create rotation and translation matrix (column-major order)
+          const cos = Math.cos(rotation);
+          const sin = Math.sin(rotation);
+
+          const matrix = new Float32Array([
+            cos * quadScale,
+            sin * quadScale,
+            0,
+            0,
+            -sin * quadScale,
+            cos * quadScale,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            posX,
+            posY,
+            0,
+            1,
+          ]);
+
+          const matrixUniform = shader.getUniformLocation("uMatrix");
+          if (matrixUniform) {
+            gl.uniformMatrix4fv(matrixUniform, false, matrix);
+          }
+
+          // Set color uniform
+          const colorUniform = shader.getUniformLocation("uColor");
+          if (colorUniform) {
+            gl.uniform3f(
+              colorUniform,
+              quadColors[i][0],
+              quadColors[i][1],
+              quadColors[i][2],
+            );
+          }
+
+          // Draw quad
+          gl.drawArrays(gl.TRIANGLES, 0, vertexBuffer.getVertexCount());
+        }
+
+        // Render triangles
+        const numTriangles = 2;
+        const triangleScale = 0.3;
+        const triangleColors = [
+          [1.0, 1.0, 0.2], // Yellow
+          [0.2, 1.0, 1.0], // Cyan
+        ];
+
+        for (let i = 0; i < numTriangles; i++) {
+          // Calculate triangle position and rotation
+          const angle = (i / numTriangles) * Math.PI * 2 + elapsedSeconds * 0.7;
+          const radius = 0.3 + 0.15 * Math.cos(elapsedSeconds * 0.4 + i);
+          const posX = radius * Math.cos(angle);
+          const posY = radius * Math.sin(angle);
+          const rotation =
+            -elapsedSeconds * 1.5 + (i * Math.PI * 2) / numTriangles;
+
+          // Create rotation and translation matrix
+          const cos = Math.cos(rotation);
+          const sin = Math.sin(rotation);
+
+          const matrix = new Float32Array([
+            cos * triangleScale,
+            sin * triangleScale,
+            0,
+            0,
+            -sin * triangleScale,
+            cos * triangleScale,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            posX,
+            posY,
+            0,
+            1,
+          ]);
+
+          const matrixUniform = shader.getUniformLocation("uMatrix");
+          if (matrixUniform) {
+            gl.uniformMatrix4fv(matrixUniform, false, matrix);
+          }
+
+          // Set color uniform
+          const colorUniform = shader.getUniformLocation("uColor");
+          if (colorUniform) {
+            gl.uniform3f(
+              colorUniform,
+              triangleColors[i][0],
+              triangleColors[i][1],
+              triangleColors[i][2],
+            );
+          }
+
+          // Draw triangle
+          gl.drawArrays(gl.TRIANGLES, 0, triangleBuffer.getVertexCount());
+        }
+
         gdevice.present();
 
         // Get and display pixels
@@ -273,7 +429,7 @@ void main() {
         if (frameCount % 60 === 0) {
           const totalElapsed = Date.now() - startTime;
           const fps = (frameCount / totalElapsed) * 1000;
-          console.log(`FPS: ${fps.toFixed(1)}`);
+          console.log(`FPS: ${fps.toFixed(1)} | Frames: ${frameCount}`);
         }
 
         // Frame rate limiting

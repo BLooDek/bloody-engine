@@ -15,7 +15,9 @@ export class VertexBuffer {
   ) {
     this.gl = gl;
     this.stride = stride;
-    this.vertexCount = stride > 0 ? data.length / stride : data.length / 3;
+    // stride is in bytes, convert to number of floats per vertex
+    const floatsPerVertex = stride > 0 ? stride / 4 : 3;
+    this.vertexCount = data.length / floatsPerVertex;
 
     const buf = gl.createBuffer();
     if (!buf) {
