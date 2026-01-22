@@ -4,13 +4,24 @@ import { Texture } from "./texture";
 import { VertexBuffer, IndexBuffer } from "./buffer";
 import { SDLWindow } from "./sdl-window";
 import { NodeRenderingContext } from "./node-context";
+import {
+  SCENE_CONFIG,
+  GEOMETRY,
+  SHADERS,
+  TEXTURE_CONFIG,
+  ANIMATION_CONFIG,
+  getBackgroundColor,
+  getQuadTransforms,
+  getTriangleTransforms,
+} from "./scene";
+import { SHADER_LIBRARY, type ShaderPreset } from "./shader-examples";
 import fs from "fs";
 import { execSync } from "child_process";
 import path from "path";
 
 console.log("🩸 Bloody Engine - Texture & Shader Demo");
-const WIDTH = 800;
-const HEIGHT = 600;
+const WIDTH = SCENE_CONFIG.width;
+const HEIGHT = SCENE_CONFIG.height;
 
 const gdevice = new GraphicsDevice(WIDTH, HEIGHT);
 const gl = gdevice.getGLContext();
@@ -30,36 +41,16 @@ console.log(
   `✓ Environment: ${gdevice.isBrowser() ? "Browser (WebGL)" : "Node.js (headless-gl)"}`,
 );
 
+// Configuration
+const ACTIVE_SHADER: ShaderPreset = "PSYCHEDELIC";
+
 // ============================================
 // Shader with Texture Support
 // ============================================
 
-const vertexShaderSource = `
-attribute vec3 aPosition;
-attribute vec2 aTexCoord;
-
-varying vec2 vTexCoord;
-
-uniform mat4 uMatrix;
-uniform vec3 uColor;
-
-void main() {
-  gl_Position = uMatrix * vec4(aPosition, 1.0);
-  vTexCoord = aTexCoord;
-}
-`;
-
-const fragmentShaderSource = `
-varying vec2 vTexCoord;
-uniform sampler2D uTexture;
-uniform vec3 uColor;
-
-void main() {
-  // Use texture * color overlay for better visibility
-  vec4 texColor = texture2D(uTexture, vTexCoord);
-  gl_FragColor = vec4(texColor.rgb * uColor, texColor.a);
-}
-`;
+const shaderPreset = SHADER_LIBRARY[ACTIVE_SHADER];
+const vertexShaderSource = shaderPreset.vertex;
+const fragmentShaderSource = shaderPreset.fragment;
 
 (async () => {
   try {
@@ -70,48 +61,19 @@ void main() {
       vertexShaderSource,
       fragmentShaderSource,
     );
-    console.log("✓ Shader compiled and linked");
+    console.log(`✓ Shader compiled and linked (${ACTIVE_SHADER})`);
 
     // Create textured quad geometry
     // Quad: 2 triangles (6 vertices)
     // Position (x, y, z) + TexCoord (u, v)
-    const quadVertices = new Float32Array([
-      // Position               TexCoord
-      -0.5,
-      -0.5,
-      0.0,
-      0.0,
-      0.0, // Bottom-left
-      0.5,
-      -0.5,
-      0.0,
-      1.0,
-      0.0, // Bottom-right
-      0.5,
-      0.5,
-      0.0,
-      1.0,
-      1.0, // Top-right
-
-      0.5,
-      0.5,
-      0.0,
-      1.0,
-      1.0, // Top-right
-      -0.5,
-      0.5,
-      0.0,
-      0.0,
-      1.0, // Top-left
-      -0.5,
-      -0.5,
-      0.0,
-      0.0,
-      0.0, // Bottom-left
-    ]);
+    const quadVertices = GEOMETRY.quad.vertices;
 
     // Create vertex buffer (5 floats per vertex: 3 for position, 2 for texcoord)
-    const vertexBuffer = new VertexBuffer(gl, quadVertices, 5 * 4);
+    const vertexBuffer = new VertexBuffer(
+      gl,
+      quadVertices,
+      GEOMETRY.quad.stride,
+    );
     console.log(
       `✓ Vertex buffer created (${vertexBuffer.getVertexCount()} vertices)`,
     );
@@ -119,33 +81,24 @@ void main() {
     // Create triangle geometry
     // Triangle: 3 vertices
     // Position (x, y, z) + TexCoord (u, v)
-    const triangleVertices = new Float32Array([
-      // Position               TexCoord
-      0.0,
-      0.5,
-      0.0,
-      0.5,
-      1.0, // Top
-      -0.5,
-      -0.5,
-      0.0,
-      0.0,
-      0.0, // Bottom-left
-      0.5,
-      -0.5,
-      0.0,
-      1.0,
-      0.0, // Bottom-right
-    ]);
+    const triangleVertices = GEOMETRY.triangle.vertices;
 
     // Create triangle buffer
-    const triangleBuffer = new VertexBuffer(gl, triangleVertices, 5 * 4);
+    const triangleBuffer = new VertexBuffer(
+      gl,
+      triangleVertices,
+      GEOMETRY.triangle.stride,
+    );
     console.log(
       `✓ Triangle buffer created (${triangleBuffer.getVertexCount()} vertices)`,
     );
 
     // Create a colorful gradient texture
-    const texture = Texture.createGradient(gl, 256, 256);
+    const texture = Texture.createGradient(
+      gl,
+      TEXTURE_CONFIG.size,
+      TEXTURE_CONFIG.size,
+    );
     console.log("✓ Gradient texture created (256x256)");
 
     // Get attribute locations
@@ -153,6 +106,9 @@ void main() {
     const texCoordAttr = shader.getAttributeLocation("aTexCoord");
     const textureUniform = shader.getUniformLocation("uTexture");
     const matrixUniform = shader.getUniformLocation("uMatrix");
+    const colorUniform = shader.getUniformLocation("uColor");
+    const glowIntensityUniform = shader.getUniformLocation("uGlowIntensity");
+    const timeUniform = shader.getUniformLocation("uTime");
 
     console.log(
       `✓ Attributes located (position=${posAttr}, texCoord=${texCoordAttr})`,
@@ -265,7 +221,7 @@ void main() {
       // Event loop for SDL window
       let frameCount = 0;
       const startTime = Date.now();
-      const targetFPS = 60;
+      const targetFPS = SCENE_CONFIG.targetFPS;
       const frameTimeMs = 1000 / targetFPS;
       let running = true;
 
@@ -292,54 +248,15 @@ void main() {
         const elapsedSeconds = (frameCount * frameTimeMs) / 1000;
 
         // Clear with animated background color
-        const bgR = 0.1 + 0.1 * Math.sin(elapsedSeconds);
-        const bgG = 0.1 + 0.1 * Math.cos(elapsedSeconds * 0.7);
-        const bgB = 0.15 + 0.1 * Math.sin(elapsedSeconds * 0.5);
-        gdevice.clear({ r: bgR, g: bgG, b: bgB, a: 1.0 });
+        const bgColor = getBackgroundColor(elapsedSeconds);
+        gdevice.clear(bgColor);
 
-        // Render multiple animated quads
-        const numQuads = 3;
-        const quadScale = 0.4;
-        const quadColors = [
-          [1.0, 0.2, 0.2], // Red
-          [0.2, 1.0, 0.2], // Green
-          [0.2, 0.2, 1.0], // Blue
-        ];
-
-        for (let i = 0; i < numQuads; i++) {
-          // Calculate quad position and rotation
-          const angle = (i / numQuads) * Math.PI * 2 + elapsedSeconds * 0.5;
-          const radius = 0.5 + 0.2 * Math.sin(elapsedSeconds * 0.3 + i);
-          const posX = radius * Math.cos(angle);
-          const posY = radius * Math.sin(angle);
-          const rotation = elapsedSeconds + (i * Math.PI * 2) / numQuads;
-
-          // Create rotation and translation matrix (column-major order)
-          const cos = Math.cos(rotation);
-          const sin = Math.sin(rotation);
-
-          const matrix = new Float32Array([
-            cos * quadScale,
-            sin * quadScale,
-            0,
-            0,
-            -sin * quadScale,
-            cos * quadScale,
-            0,
-            0,
-            0,
-            0,
-            1,
-            0,
-            posX,
-            posY,
-            0,
-            1,
-          ]);
-
+        // Get quad transformations
+        const quadTransforms = getQuadTransforms(elapsedSeconds);
+        for (const transform of quadTransforms) {
           const matrixUniform = shader.getUniformLocation("uMatrix");
           if (matrixUniform) {
-            gl.uniformMatrix4fv(matrixUniform, false, matrix);
+            gl.uniformMatrix4fv(matrixUniform, false, transform.matrix);
           }
 
           // Set color uniform
@@ -347,59 +264,33 @@ void main() {
           if (colorUniform) {
             gl.uniform3f(
               colorUniform,
-              quadColors[i][0],
-              quadColors[i][1],
-              quadColors[i][2],
+              transform.color[0],
+              transform.color[1],
+              transform.color[2],
             );
+          }
+
+          // Set glow-specific uniforms
+          if (glowIntensityUniform) {
+            gl.uniform1f(
+              glowIntensityUniform,
+              1.5 + Math.sin(elapsedSeconds) * 0.5,
+            );
+          }
+          if (timeUniform) {
+            gl.uniform1f(timeUniform, elapsedSeconds);
           }
 
           // Draw quad
           gl.drawArrays(gl.TRIANGLES, 0, vertexBuffer.getVertexCount());
         }
 
-        // Render triangles
-        const numTriangles = 2;
-        const triangleScale = 0.3;
-        const triangleColors = [
-          [1.0, 1.0, 0.2], // Yellow
-          [0.2, 1.0, 1.0], // Cyan
-        ];
-
-        for (let i = 0; i < numTriangles; i++) {
-          // Calculate triangle position and rotation
-          const angle = (i / numTriangles) * Math.PI * 2 + elapsedSeconds * 0.7;
-          const radius = 0.3 + 0.15 * Math.cos(elapsedSeconds * 0.4 + i);
-          const posX = radius * Math.cos(angle);
-          const posY = radius * Math.sin(angle);
-          const rotation =
-            -elapsedSeconds * 1.5 + (i * Math.PI * 2) / numTriangles;
-
-          // Create rotation and translation matrix
-          const cos = Math.cos(rotation);
-          const sin = Math.sin(rotation);
-
-          const matrix = new Float32Array([
-            cos * triangleScale,
-            sin * triangleScale,
-            0,
-            0,
-            -sin * triangleScale,
-            cos * triangleScale,
-            0,
-            0,
-            0,
-            0,
-            1,
-            0,
-            posX,
-            posY,
-            0,
-            1,
-          ]);
-
+        // Get triangle transformations
+        const triangleTransforms = getTriangleTransforms(elapsedSeconds);
+        for (const transform of triangleTransforms) {
           const matrixUniform = shader.getUniformLocation("uMatrix");
           if (matrixUniform) {
-            gl.uniformMatrix4fv(matrixUniform, false, matrix);
+            gl.uniformMatrix4fv(matrixUniform, false, transform.matrix);
           }
 
           // Set color uniform
@@ -407,10 +298,21 @@ void main() {
           if (colorUniform) {
             gl.uniform3f(
               colorUniform,
-              triangleColors[i][0],
-              triangleColors[i][1],
-              triangleColors[i][2],
+              transform.color[0],
+              transform.color[1],
+              transform.color[2],
             );
+          }
+
+          // Set glow-specific uniforms
+          if (glowIntensityUniform) {
+            gl.uniform1f(
+              glowIntensityUniform,
+              2.0 + Math.cos(elapsedSeconds * 0.7) * 0.8,
+            );
+          }
+          if (timeUniform) {
+            gl.uniform1f(timeUniform, elapsedSeconds);
           }
 
           // Draw triangle
