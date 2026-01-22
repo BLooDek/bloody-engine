@@ -65,4 +65,22 @@ export class NodeRenderingContext implements RenderingContext {
     // but we can explicitly signal we're done
     this.glContext.flush();
   }
+
+  /**
+   * Read the current framebuffer contents as RGBA pixel data
+   * Used for capturing frames for display or saving
+   */
+  readPixels(): Uint8Array {
+    const pixelData = new Uint8Array(this.width * this.height * 4);
+    this.glContext.readPixels(
+      0,
+      0,
+      this.width,
+      this.height,
+      this.glContext.RGBA,
+      this.glContext.UNSIGNED_BYTE,
+      pixelData,
+    );
+    return pixelData;
+  }
 }

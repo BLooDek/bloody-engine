@@ -9,5 +9,12 @@ export type {
 export { BrowserRenderingContext } from "./browser-context";
 export { NodeRenderingContext } from "./node-context";
 export { RenderingContextFactory } from "./rendering-context-factory";
+
 // Shader abstraction
 export { Shader } from "./shader";
+
+// Texture management
+export { Texture } from "./texture";
+
+// Buffer management
+export { VertexBuffer, IndexBuffer } from "./buffer";

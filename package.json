@@ -17,7 +17,7 @@
     "build:web": "vite build --config vite.config.web.ts",
     "build:node": "vite build --config vite.config.node.ts",
     "preview": "vite preview",
-    "start": "npm run build:node && node dist/node/index.js"
+    "start": "npm run build:node && node dist/node/index-node.js"
   },
   "devDependencies": {
     "@types/gl": "^6.0.5",
