@@ -1,35 +1,89 @@
-import createGL from "gl";
+import type { RenderingContext } from "./rendering-context";
+import { RenderingContextFactory } from "./rendering-context-factory";
 
+/**
+ * Graphics device that manages rendering context and WebGL operations
+ * Uses standardized RenderingContext interface, never directly references DOM
+ */
 export class GraphicsDevice {
-  width: number;
-  height: number;
-  gl: WebGLRenderingContext | null;
+  private context: RenderingContext;
 
   constructor(width: number, height: number) {
-    this.gl = null;
-    this.width = width;
-    this.height = height;
-    this.init();
+    // Use factory to create appropriate context for environment
+    this.context = RenderingContextFactory.createContext({
+      width,
+      height,
+      preserveDrawingBuffer: true,
+    });
   }
 
-  init() {
-    if (typeof window !== "undefined" && typeof document !== "undefined") {
-      // Browser Strategy
-      const canvas = document.createElement("canvas");
-      canvas.width = this.width;
-      canvas.height = this.height;
-      document.body.appendChild(canvas);
-      this.gl = canvas.getContext("webgl", { alpha: false });
-    } else {
-      // Server Strategy
-      // [5] headless-gl requires explicit dimensions
-      this.gl = createGL(this.width, this.height, {
-        preserveDrawingBuffer: true,
-      });
-    }
+  /**
+   * Get the underlying WebGL rendering context
+   */
+  getGLContext(): WebGLRenderingContext {
+    return this.context.glContext;
+  }
 
-    if (!this.gl) {
-      throw new Error("Failed to initialize WebGL context.");
-    }
+  /**
+   * Get the rendering context
+   */
+  getRenderingContext(): RenderingContext {
+    return this.context;
+  }
+
+  /**
+   * Get current width
+   */
+  getWidth(): number {
+    return this.context.width;
+  }
+
+  /**
+   * Get current height
+   */
+  getHeight(): number {
+    return this.context.height;
+  }
+
+  /**
+   * Get viewport dimensions
+   */
+  getViewport(): { width: number; height: number } {
+    return this.context.getViewport();
+  }
+
+  /**
+   * Check if running in browser
+   */
+  isBrowser(): boolean {
+    return this.context.isBrowser;
+  }
+
+  /**
+   * Resize the graphics device
+   */
+  resize(width: number, height: number): void {
+    this.context.resize(width, height);
+  }
+
+  /**
+   * Clear the rendering surface
+   */
+  clear(color?: { r: number; g: number; b: number; a: number }): void {
+    this.context.clear(color);
+  }
+
+  /**
+   * Present the rendered frame
+   */
+  present(): void {
+    this.context.present();
+  }
+
+  /**
+   * Cleanup and release resources
+   */
+  dispose(): void {
+    this.context.dispose();
   }
 }
