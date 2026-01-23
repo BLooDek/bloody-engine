@@ -2,6 +2,7 @@
   "name": "bloody-engine",
   "version": "1.0.0",
   "description": "A WebGL-based graphics engine",
+  "license": "MIT",
   "main": "dist/node/index.js",
   "type": "module",
   "exports": {
