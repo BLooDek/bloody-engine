@@ -12,6 +12,7 @@
 
 import type { Shader } from "../core/shader";
 import type { Texture } from "../core/texture";
+import type { Camera } from "./camera";
 
 /**
  * V1 Quad instance data (for backward compatibility)
@@ -192,8 +193,9 @@ export class BatchRenderer {
 
   /**
    * Render the batch
+   * @param camera Optional camera for view transform (defaults to identity matrix)
    */
-  render(): void {
+  render(camera?: Camera): void {
     if (this.quads.length === 0) {
       return;
     }
@@ -247,13 +249,13 @@ export class BatchRenderer {
         }
       }
 
-      // Set up identity matrix (no additional transform)
+      // Set up view matrix from camera (or identity if no camera)
       const matrixUniform = this.shader.getUniformLocation("uMatrix");
       if (matrixUniform !== null) {
-        const identityMatrix = new Float32Array([
+        const matrix = camera ? camera.getViewMatrix() : new Float32Array([
           1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
         ]);
-        this.gl.uniformMatrix4fv(matrixUniform, false, identityMatrix);
+        this.gl.uniformMatrix4fv(matrixUniform, false, matrix);
       }
 
       // Draw all quads
@@ -494,8 +496,9 @@ export class SpriteBatchRenderer {
 
   /**
    * Render the batch
+   * @param camera Optional camera for view transform (defaults to identity matrix)
    */
-  render(): void {
+  render(camera?: Camera): void {
     if (this.quads.length === 0) {
       return;
     }
@@ -587,13 +590,13 @@ export class SpriteBatchRenderer {
         }
       }
 
-      // Set up identity matrix (no additional transform)
+      // Set up view matrix from camera (or identity if no camera)
       const matrixUniform = this.shader.getUniformLocation("uMatrix");
       if (matrixUniform !== null) {
-        const identityMatrix = new Float32Array([
+        const matrix = camera ? camera.getViewMatrix() : new Float32Array([
           1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
         ]);
-        this.gl.uniformMatrix4fv(matrixUniform, false, identityMatrix);
+        this.gl.uniformMatrix4fv(matrixUniform, false, matrix);
       }
 
       // Draw all quads

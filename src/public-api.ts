@@ -20,8 +20,11 @@ export { Texture } from "./core/texture";
 export { VertexBuffer, IndexBuffer } from "./core/buffer";
 
 // Batch rendering
-export { BatchRenderer } from "./rendering/batch-renderer";
-export type { QuadInstance } from "./rendering/batch-renderer";
+export { BatchRenderer, SpriteBatchRenderer } from "./rendering/batch-renderer";
+export type { QuadInstance, SpriteQuadInstance } from "./rendering/batch-renderer";
+
+// Camera system
+export { Camera, Matrix4 } from "./rendering/camera";
 
 // Resource loading
 export type {

@@ -313,6 +313,7 @@ async function runSpriteBatchRendererV2Demo() {
 
   // Import necessary classes
   const { SpriteBatchRenderer } = await import("./rendering/batch-renderer");
+  const { Camera } = await import("./rendering/camera");
 
   const gdevice = new GraphicsDevice(WIDTH, HEIGHT);
   const gl = gdevice.getGLContext();
@@ -322,7 +323,7 @@ async function runSpriteBatchRendererV2Demo() {
   // Create SDL window for live rendering
   let sdlWindow: SDLWindow | null = null;
   try {
-    sdlWindow = new SDLWindow(WIDTH, HEIGHT, "Bloody Engine - V2 Sprites");
+    sdlWindow = new SDLWindow(WIDTH, HEIGHT, "Bloody Engine - V2 Sprites + Camera");
   } catch (error) {
     console.warn("⚠ SDL window creation failed, running in headless mode");
   }
@@ -345,10 +346,47 @@ async function runSpriteBatchRendererV2Demo() {
   spriteBatchRenderer.setTexture(texture);
   console.log("✓ Sprite batch renderer created (V2)");
 
+  // ============================================
+  // Camera System Setup
+  // ============================================
+  const camera = new Camera(0, 0, 1.0);
+  console.log("✓ Camera created");
+  console.log("\n🎮 Camera Controls:");
+  console.log("  • WASD / Arrow Keys - Move camera");
+  console.log("  • Q / E - Zoom out / in");
+  console.log("  • R - Reset camera");
+  console.log("  • ESC - Exit demo");
+
+  // Keyboard state for smooth camera movement
+  const keys = new Set<string>();
+
+  // Camera movement speed (world units per second)
+  const moveSpeed = 0.5;
+  const zoomSpeed = 2.0; // zoom factor per second
+
   // Animation state
   let startTime = Date.now();
   let frameCount = 0;
-  const maxFrames = 60; // Render 60 frames for demo
+  let lastTime = startTime;
+
+  // ============================================
+  // Keyboard Event Handlers
+  // ============================================
+  if (sdlWindow) {
+    sdlWindow.on("keyDown", (event: any) => {
+      keys.add(event.key.toLowerCase());
+
+      // Handle reset camera
+      if (event.key.toLowerCase() === "r") {
+        camera.reset();
+        console.log("📷 Camera reset to default position");
+      }
+    });
+
+    sdlWindow.on("keyUp", (event: any) => {
+      keys.delete(event.key.toLowerCase());
+    });
+  }
 
   /**
    * Create animated sprite quad instances with full V2 features
@@ -448,7 +486,51 @@ async function runSpriteBatchRendererV2Demo() {
    */
   function renderFrame() {
     const now = Date.now();
+    const deltaTime = (now - lastTime) / 1000; // Delta time in seconds
     const elapsedSeconds = (now - startTime) / 1000;
+    lastTime = now;
+
+    // ============================================
+    // Handle Camera Input
+    // ============================================
+    let cameraMoved = false;
+    const moveAmount = moveSpeed * deltaTime;
+
+    // Movement: WASD or Arrow keys
+    if (keys.has("w") || keys.has("arrowup")) {
+      camera.y += moveAmount;
+      cameraMoved = true;
+    }
+    if (keys.has("s") || keys.has("arrowdown")) {
+      camera.y -= moveAmount;
+      cameraMoved = true;
+    }
+    if (keys.has("a") || keys.has("arrowleft")) {
+      camera.x -= moveAmount;
+      cameraMoved = true;
+    }
+    if (keys.has("d") || keys.has("arrowright")) {
+      camera.x += moveAmount;
+      cameraMoved = true;
+    }
+
+    // Zoom: Q/E keys
+    const zoomFactor = 1 + (zoomSpeed - 1) * deltaTime;
+    if (keys.has("q")) {
+      camera.zoomBy(1 / zoomFactor); // Zoom out
+      cameraMoved = true;
+    }
+    if (keys.has("e")) {
+      camera.zoomBy(zoomFactor); // Zoom in
+      cameraMoved = true;
+    }
+
+    // Print camera status when changed
+    if (cameraMoved && frameCount % 30 === 0) {
+      console.log(
+        `📷 Camera: x=${camera.x.toFixed(2)}, y=${camera.y.toFixed(2)}, zoom=${camera.zoom.toFixed(2)}x`,
+      );
+    }
 
     // Get sprite quads for this frame
     const quads = getSpriteQuadsForFrame(elapsedSeconds);
@@ -464,8 +546,8 @@ async function runSpriteBatchRendererV2Demo() {
     // Clear screen with dark background
     gdevice.clear({ r: 0.1, g: 0.1, b: 0.12, a: 1.0 });
 
-    // Render batch
-    spriteBatchRenderer.render();
+    // Render batch with camera
+    spriteBatchRenderer.render(camera);
 
     // Present frame
     gdevice.present();
@@ -479,15 +561,28 @@ async function runSpriteBatchRendererV2Demo() {
     frameCount++;
   }
 
-  console.log(
-    `\nRendering ${maxFrames} frames (${(maxFrames / 6000).toFixed(1)}s)...`,
-  );
+  console.log("\n🎬 Starting render loop (press ESC to exit)...");
 
   const frames = [];
   const renderStart = Date.now();
 
+  // Handle ESC key and window close
+  let running = true;
+  if (sdlWindow) {
+    sdlWindow.on("close", () => {
+      running = false;
+    });
+
+    sdlWindow.on("keyDown", (event: any) => {
+      if (event.key === "escape") {
+        running = false;
+        console.log("\n✓ Exiting demo...");
+      }
+    });
+  }
+
   // Render all frames
-  while (!sdlWindow || sdlWindow.isOpen()) {
+  while (running && (!sdlWindow || sdlWindow.isOpen())) {
     renderFrame();
 
     // Capture first frame for inspection
@@ -496,8 +591,8 @@ async function runSpriteBatchRendererV2Demo() {
       frames.push(Buffer.from(pixelData));
     }
 
-    // Frame time control
-    await new Promise((resolve) => setTimeout(resolve, 16)); // ~60 FPS
+    // Frame time control (~60 FPS)
+    await new Promise((resolve) => setTimeout(resolve, 16));
   }
 
   const renderEnd = Date.now();
