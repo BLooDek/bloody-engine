@@ -15,8 +15,8 @@ import {
   getBackgroundColor,
   getQuadTransforms,
   getTriangleTransforms,
-} from "./scene";
-import { SHADER_LIBRARY, type ShaderPreset } from "./shader-examples";
+} from "../scene/scene";
+import { SHADER_LIBRARY, type ShaderPreset } from "../examples/shader-examples";
 
 // Configuration
 const ACTIVE_SHADER: ShaderPreset = "PSYCHEDELIC";

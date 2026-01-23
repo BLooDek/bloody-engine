@@ -11,8 +11,8 @@
 
 import { GraphicsDevice } from "./grahpic-device";
 import { BatchRenderer, type QuadInstance } from "./batch-renderer";
-import { Texture } from "./texture";
-import { SHADERS } from "./scene";
+import { Texture } from "./core/texture";
+import { SHADERS } from "./scene/scene";
 
 async function runIntegrationTest(): Promise<void> {
   console.log("🧪 Batch Renderer Integration Tests\n");

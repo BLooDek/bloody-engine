@@ -2,7 +2,7 @@ import createGL from "gl";
 import type {
   RenderingContext,
   RenderingContextOptions,
-} from "./rendering-context";
+} from "../../rendering/rendering-context";
 
 /**
  * Node.js-based WebGL rendering context implementation

@@ -1,3 +1,5 @@
+import { ProjectionConfig, type GridCoord } from "../rendering/projection";
+
 /**
  * Scene configuration and constants
  * Shared between Node.js and Browser rendering
@@ -8,6 +10,68 @@ export const SCENE_CONFIG = {
   height: 600,
   targetFPS: 60,
 };
+
+// ============================================================================
+// Projection Configuration
+// ============================================================================
+
+export const PROJECTION_CONFIG = new ProjectionConfig(
+  64, // tileWidth: 64 pixels
+  32, // tileHeight: 32 pixels
+  1.0, // zScale: 1:1 height scale
+);
+
+/**
+ * Entity for visualization (used in projection demo)
+ */
+export interface VisualizationEntity {
+  id: string;
+  name: string;
+  gridPos: GridCoord;
+  color: [number, number, number]; // RGB [0, 1]
+  size: number; // Relative size for rendering
+}
+
+/**
+ * Projection visualization entities to render
+ */
+export const PROJECTION_ENTITIES: VisualizationEntity[] = [
+  {
+    id: "player",
+    name: "Player",
+    gridPos: { xgrid: 5, ygrid: 5, zheight: 0 },
+    color: [0.2, 1.0, 0.2], // Green
+    size: 1.0,
+  },
+  {
+    id: "enemy1",
+    name: "Enemy",
+    gridPos: { xgrid: 10, ygrid: 8, zheight: 0 },
+    color: [1.0, 0.2, 0.2], // Red
+    size: 0.9,
+  },
+  {
+    id: "chest",
+    name: "Treasure",
+    gridPos: { xgrid: 8, ygrid: 6, zheight: 0 },
+    color: [1.0, 1.0, 0.2], // Yellow
+    size: 0.7,
+  },
+  {
+    id: "tower",
+    name: "Tower",
+    gridPos: { xgrid: 12, ygrid: 12, zheight: 3 },
+    color: [0.5, 0.5, 1.0], // Light Blue
+    size: 0.8,
+  },
+  {
+    id: "floating",
+    name: "Floating Object",
+    gridPos: { xgrid: 3, ygrid: 10, zheight: 5 },
+    color: [1.0, 0.5, 1.0], // Magenta
+    size: 0.6,
+  },
+];
 
 // Geometry definitions
 export const GEOMETRY = {

@@ -9,10 +9,10 @@
 
 import { GraphicsDevice } from "./grahpic-device";
 import { BatchRenderer, type QuadInstance } from "./batch-renderer";
-import { Texture } from "./texture";
-import { SDLWindow } from "./sdl-window";
+import { Texture } from "./core/texture";
+import { SDLWindow } from "./platforms/node/sdl-window";
 import { NodeRenderingContext } from "./node-context";
-import { SCENE_CONFIG, SHADERS, TEXTURE_CONFIG } from "./scene";
+import { SCENE_CONFIG, SHADERS, TEXTURE_CONFIG } from "./scene/scene";
 import fs from "fs";
 import { execSync } from "child_process";
 import path from "path";

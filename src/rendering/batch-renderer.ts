@@ -5,8 +5,8 @@
  * Uses DYNAMIC_DRAW strategy to allow per-frame vertex updates for moving sprites.
  */
 
-import type { Shader } from "./shader";
-import type { Texture } from "./texture";
+import type { Shader } from "../core/shader";
+import type { Texture } from "../core/texture";
 
 /**
  * Quad instance data

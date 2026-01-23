@@ -9,9 +9,9 @@
 
 import { GraphicsDevice } from "./grahpic-device";
 import { BatchRenderer, type QuadInstance } from "./batch-renderer";
-import { Texture } from "./texture";
-import { SCENE_CONFIG, SHADERS } from "./scene";
-import { SDLWindow } from "./sdl-window";
+import { Texture } from "../core/texture";
+import { SCENE_CONFIG, SHADERS } from "../scene/scene";
+import { SDLWindow } from "../platforms/node/sdl-window";
 import { NodeRenderingContext } from "./node-context";
 import fs from "fs";
 import path from "path";

@@ -1,9 +1,8 @@
-import { GraphicsDevice } from "./grahpic-device";
-import { Shader } from "./shader";
-import { Texture } from "./texture";
-import { VertexBuffer, IndexBuffer } from "./buffer";
-import { SDLWindow } from "./sdl-window";
-import { NodeRenderingContext } from "./node-context";
+import { Shader } from "./core/shader";
+import { Texture } from "./core/texture";
+import { VertexBuffer, IndexBuffer } from "./core/buffer";
+import { SDLWindow } from "./platforms/node/sdl-window";
+
 import {
   SCENE_CONFIG,
   GEOMETRY,
@@ -13,13 +12,31 @@ import {
   getBackgroundColor,
   getQuadTransforms,
   getTriangleTransforms,
-} from "./scene";
-import { SHADER_LIBRARY, type ShaderPreset } from "./shader-examples";
+  PROJECTION_CONFIG,
+  PROJECTION_ENTITIES,
+} from "./scene/scene";
+import {
+  gridToScreen,
+  type GridCoord,
+  type ScreenCoord,
+} from "./rendering/projection";
+import {
+  initializeGameProjection,
+  createEntity,
+  updateEntityScreenPosition,
+  sortEntitiesByDepth,
+  runExampleScenario,
+} from "./examples/projection-examples";
+import { SHADER_LIBRARY, type ShaderPreset } from "./examples/shader-examples";
 import fs from "fs";
 import { execSync } from "child_process";
 import path from "path";
+import { NodeRenderingContext } from "./platforms/node/node-context";
+import { GraphicsDevice } from "./core/grahpic-device";
 
-console.log("🩸 Bloody Engine - Texture & Shader Demo");
+console.log(
+  "🩸 Bloody Engine - Texture & Shader Demo + Projection Visualization",
+);
 const WIDTH = SCENE_CONFIG.width;
 const HEIGHT = SCENE_CONFIG.height;
 
@@ -40,6 +57,50 @@ console.log(`✓ Graphics device initialized (${WIDTH}x${HEIGHT})`);
 console.log(
   `✓ Environment: ${gdevice.isBrowser() ? "Browser (WebGL)" : "Node.js (headless-gl)"}`,
 );
+
+// ============================================
+// Projection Visualization Setup
+// ============================================
+
+console.log("\n✨ Setting up Projection Visualization System...");
+
+// Initialize projection and run example scenario
+console.log("\n📊 Running projection example scenario:");
+runExampleScenario();
+
+// Setup projection entities for rendering
+interface RenderableEntity {
+  gridPos: GridCoord;
+  screenPos: ScreenCoord;
+  color: [number, number, number];
+  size: number;
+  name: string;
+}
+
+const projectionEntities: RenderableEntity[] = PROJECTION_ENTITIES.map(
+  (entity) => {
+    const screenPos = gridToScreen(entity.gridPos, PROJECTION_CONFIG);
+    return {
+      gridPos: entity.gridPos,
+      screenPos,
+      color: entity.color,
+      size: entity.size,
+      name: entity.name,
+    };
+  },
+);
+
+console.log(
+  `✓ ${projectionEntities.length} projection entities prepared for visualization`,
+);
+
+// Display entity information
+console.log("\n📍 Projection Entities:");
+projectionEntities.forEach((entity) => {
+  console.log(
+    `  • ${entity.name} at grid (${entity.gridPos.xgrid}, ${entity.gridPos.ygrid}, ${entity.gridPos.zheight}) → screen (${entity.screenPos.xscreen.toFixed(0)}, ${entity.screenPos.yscreen.toFixed(0)})`,
+  );
+});
 
 // Configuration
 const ACTIVE_SHADER: ShaderPreset = "PSYCHEDELIC";
@@ -317,6 +378,58 @@ const fragmentShaderSource = shaderPreset.fragment;
 
           // Draw triangle
           gl.drawArrays(gl.TRIANGLES, 0, triangleBuffer.getVertexCount());
+        }
+
+        // ============================================
+        // Render Projection Entities
+        // ============================================
+        // Render each projection entity as a small quad
+        for (const entity of projectionEntities) {
+          // Create a transform matrix for the entity
+          // Position on screen at isometric coordinates
+          const screenX = (entity.screenPos.xscreen / WIDTH) * 2 - 1;
+          const screenY = 1 - (entity.screenPos.yscreen / HEIGHT) * 2;
+
+          // Create scale based on entity size
+          const scale = entity.size * 0.1;
+
+          const entityMatrix = new Float32Array([
+            scale,
+            0,
+            0,
+            0,
+            0,
+            scale,
+            0,
+            0,
+            0,
+            0,
+            1,
+            0,
+            screenX,
+            screenY,
+            0,
+            1,
+          ]);
+
+          const matrixUniform = shader.getUniformLocation("uMatrix");
+          if (matrixUniform) {
+            gl.uniformMatrix4fv(matrixUniform, false, entityMatrix);
+          }
+
+          // Set entity color
+          const colorUniform = shader.getUniformLocation("uColor");
+          if (colorUniform) {
+            gl.uniform3f(
+              colorUniform,
+              entity.color[0],
+              entity.color[1],
+              entity.color[2],
+            );
+          }
+
+          // Draw entity as quad
+          gl.drawArrays(gl.TRIANGLES, 0, vertexBuffer.getVertexCount());
         }
 
         gdevice.present();

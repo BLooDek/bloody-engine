@@ -5,19 +5,19 @@ export { GraphicsDevice } from "./grahpic-device";
 export type {
   RenderingContext,
   RenderingContextOptions,
-} from "./rendering-context";
+} from "./rendering/rendering-context";
 export { BrowserRenderingContext } from "./browser-context";
 export { NodeRenderingContext } from "./node-context";
 export { RenderingContextFactory } from "./rendering-context-factory";
 
 // Shader abstraction
-export { Shader } from "./shader";
+export { Shader } from "./core/shader";
 
 // Texture management
-export { Texture } from "./texture";
+export { Texture } from "./core/texture";
 
 // Buffer management
-export { VertexBuffer, IndexBuffer } from "./buffer";
+export { VertexBuffer, IndexBuffer } from "./core/buffer";
 // Batch rendering
 export { BatchRenderer } from "./batch-renderer";
 export type { QuadInstance } from "./batch-renderer";

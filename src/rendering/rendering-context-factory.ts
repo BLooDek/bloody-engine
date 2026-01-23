@@ -1,9 +1,9 @@
 import type {
   RenderingContext,
   RenderingContextOptions,
-} from "./rendering-context";
-import { BrowserRenderingContext } from "./browser-context";
-import { NodeRenderingContext } from "./node-context";
+} from "../rendering/rendering-context";
+import { BrowserRenderingContext } from "../platforms/browser/browser-context";
+import { NodeRenderingContext } from "../platforms/node/node-context";
 
 /**
  * Factory for creating environment-appropriate rendering contexts

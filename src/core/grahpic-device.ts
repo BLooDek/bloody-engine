@@ -1,5 +1,5 @@
-import type { RenderingContext } from "./rendering-context";
-import { RenderingContextFactory } from "./rendering-context-factory";
+import type { RenderingContext } from "../rendering/rendering-context";
+import { RenderingContextFactory } from "../rendering/rendering-context-factory";
 import { Shader } from "./shader";
 
 /**

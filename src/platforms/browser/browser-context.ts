@@ -1,7 +1,7 @@
 import type {
   RenderingContext,
   RenderingContextOptions,
-} from "./rendering-context";
+} from "../../rendering/rendering-context";
 
 /**
  * Browser-based WebGL rendering context implementation
