@@ -17,6 +17,7 @@ export default defineConfig({
         "@kmamal/sdl",
         "gl",
         "fs",
+        "fs/promises",
         "path",
         "os",
         "events",

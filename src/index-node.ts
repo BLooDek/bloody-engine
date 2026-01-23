@@ -35,10 +35,172 @@ import { NodeRenderingContext } from "./platforms/node/node-context";
 import { GraphicsDevice } from "./core/grahpic-device";
 
 console.log(
-  "🩸 Bloody Engine - Texture & Shader Demo + Projection Visualization",
+  "🩸 Bloody Engine - Texture & Shader Demo + Projection Visualization + Resource Loader",
 );
 const WIDTH = SCENE_CONFIG.width;
 const HEIGHT = SCENE_CONFIG.height;
+
+// ============================================
+// Resource Loader Demo (Node.js)
+// ============================================
+async function runResourceLoaderDemo() {
+  console.log("\n" + "=".repeat(60));
+  console.log("📦 RESOURCE LOADER DEMO (Node.js)");
+  console.log("=".repeat(60));
+
+  const { ResourceLoaderFactory, Environment } = await import("./core/resource-loader-factory");
+  const { createResourcePipeline } = await import("./core/resource-pipeline");
+  const { GraphicsDevice } = await import("./core/grahpic-device");
+  const { Shader } = await import("./core/shader");
+  const { Texture } = await import("./core/texture");
+  const { VertexBuffer } = await import("./core/buffer");
+
+  console.log(`✓ Environment detected: ${ResourceLoaderFactory.detectEnvironment()}`);
+
+  // Create resource pipeline for Node.js
+  const pipeline = await createResourcePipeline({
+    concurrency: 5,
+    cache: true,
+    baseDir: process.cwd(),
+  });
+  console.log("✓ Resource pipeline created for Node.js");
+
+  // Load shader files
+  const shaders = [
+    {
+      name: "basic",
+      vertex: "resources/shaders/basic.vert",
+      fragment: "resources/shaders/basic.frag",
+    },
+    {
+      name: "glow",
+      vertex: "resources/shaders/glow.vert",
+      fragment: "resources/shaders/glow.frag",
+    },
+  ];
+
+  console.log(`\n📝 Loading ${shaders.length} shaders from disk...`);
+  const loadedShaders = await pipeline.loadShaders(shaders);
+
+  for (const shader of loadedShaders) {
+    console.log(`  ✓ ${shader.name}:`);
+    console.log(`    Vertex: ${shader.vertex.length} chars`);
+    console.log(`    Fragment: ${shader.fragment.length} chars`);
+  }
+
+  console.log(`\n💾 Cache size: ${pipeline.getCacheSize()} resources`);
+
+  // Create graphics device
+  const gdevice = new GraphicsDevice(800, 600);
+  const gl = gdevice.getGLContext();
+  console.log(`✓ Graphics device initialized (800x600)`);
+
+  // Create shader from loaded source
+  const glowShader = loadedShaders.find((s) => s.name === "glow")!;
+  const shader = gdevice.createShader(glowShader.vertex, glowShader.fragment);
+  console.log("✓ Shader compiled from loaded files");
+
+  // Create texture
+  const texture = Texture.createGradient(gl, 256, 256);
+  console.log("✓ Gradient texture created");
+
+  // Create geometry
+  const quadBuffer = new VertexBuffer(gl, GEOMETRY.quad.vertices, GEOMETRY.quad.stride);
+  console.log(`✓ Quad buffer created (${quadBuffer.getVertexCount()} vertices)`);
+
+  // Setup rendering
+  shader.use();
+  const posAttr = shader.getAttributeLocation("aPosition");
+  const texCoordAttr = shader.getAttributeLocation("aTexCoord");
+  const textureUniform = shader.getUniformLocation("uTexture");
+  const matrixUniform = shader.getUniformLocation("uMatrix");
+  const colorUniform = shader.getUniformLocation("uColor");
+  const glowIntensityUniform = shader.getUniformLocation("uGlowIntensity");
+
+  quadBuffer.bind();
+  gl.enableVertexAttribArray(posAttr);
+  gl.vertexAttribPointer(posAttr, 3, gl.FLOAT, false, GEOMETRY.quad.stride, 0);
+  gl.enableVertexAttribArray(texCoordAttr);
+  gl.vertexAttribPointer(texCoordAttr, 2, gl.FLOAT, false, GEOMETRY.quad.stride, 3 * 4);
+
+  texture.bind(0);
+  gl.uniform1i(textureUniform, 0);
+
+  // Clear and render a test frame
+  gdevice.clear({ r: 0.1, g: 0.1, b: 0.1, a: 1.0 });
+
+  const testQuads = [
+    { x: -0.3, y: 0.3, color: [1.0, 0.2, 0.2], glow: 1.5 },
+    { x: 0.3, y: 0.3, color: [0.2, 1.0, 0.2], glow: 1.8 },
+    { x: -0.3, y: -0.3, color: [0.2, 0.5, 1.0], glow: 2.0 },
+    { x: 0.3, y: -0.3, color: [1.0, 1.0, 0.2], glow: 1.6 },
+  ];
+
+  for (const quad of testQuads) {
+    const matrix = createIdentityMatrix();
+    translateMatrix(matrix, quad.x, quad.y, 0.0);
+    scaleMatrix(matrix, 0.4, 0.4, 1.0);
+
+    if (matrixUniform) gl.uniformMatrix4fv(matrixUniform, false, matrix);
+    if (colorUniform) gl.uniform3f(colorUniform, quad.color[0], quad.color[1], quad.color[2]);
+    if (glowIntensityUniform) gl.uniform1f(glowIntensityUniform, quad.glow);
+
+    gl.drawArrays(gl.TRIANGLES, 0, quadBuffer.getVertexCount());
+  }
+
+  // Capture and save frame
+  const renderingContext = gdevice.getRenderingContext() as NodeRenderingContext;
+  const pixelData = renderingContext.readPixels();
+  const ppmPath = "./resource-loader-demo-output.ppm";
+  savePPM(pixelData, 800, 600, ppmPath);
+
+  console.log(`✓ Test frame rendered and saved to ${ppmPath}`);
+  console.log("✓ Resource loader demo complete!\n");
+
+  // Cleanup
+  quadBuffer.dispose();
+  texture.dispose();
+  shader.dispose();
+  gdevice.dispose();
+}
+
+// Helper to save PPM file
+function savePPM(pixelData: Uint8Array, width: number, height: number, outputPath: string) {
+  const ppmHeader = `P6\n${width} ${height}\n255\n`;
+  const ppmData = Buffer.alloc(3 * width * height);
+
+  for (let i = 0; i < width * height; i++) {
+    const srcIdx = i * 4;
+    const dstIdx = i * 3;
+    ppmData[dstIdx] = pixelData[srcIdx];
+    ppmData[dstIdx + 1] = pixelData[srcIdx + 1];
+    ppmData[dstIdx + 2] = pixelData[srcIdx + 2];
+  }
+
+  fs.writeFileSync(outputPath, ppmHeader);
+  fs.appendFileSync(outputPath, ppmData);
+}
+
+function createIdentityMatrix(): Float32Array {
+  return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+}
+
+function translateMatrix(mat: Float32Array, x: number, y: number, z: number): void {
+  mat[12] += x;
+  mat[13] += y;
+  mat[14] += z;
+}
+
+function scaleMatrix(mat: Float32Array, x: number, y: number, z: number): void {
+  mat[0] *= x;
+  mat[5] *= y;
+  mat[10] *= z;
+}
+
+// Run resource loader demo first
+runResourceLoaderDemo().catch((error) => {
+  console.error("❌ Resource loader demo failed:", error);
+});
 
 const gdevice = new GraphicsDevice(WIDTH, HEIGHT);
 const gl = gdevice.getGLContext();
