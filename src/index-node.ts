@@ -48,14 +48,17 @@ async function runResourceLoaderDemo() {
   console.log("📦 RESOURCE LOADER DEMO (Node.js)");
   console.log("=".repeat(60));
 
-  const { ResourceLoaderFactory, Environment } = await import("./core/resource-loader-factory");
+  const { ResourceLoaderFactory, Environment } =
+    await import("./core/resource-loader-factory");
   const { createResourcePipeline } = await import("./core/resource-pipeline");
   const { GraphicsDevice } = await import("./core/grahpic-device");
   const { Shader } = await import("./core/shader");
   const { Texture } = await import("./core/texture");
   const { VertexBuffer } = await import("./core/buffer");
 
-  console.log(`✓ Environment detected: ${ResourceLoaderFactory.detectEnvironment()}`);
+  console.log(
+    `✓ Environment detected: ${ResourceLoaderFactory.detectEnvironment()}`,
+  );
 
   // Create resource pipeline for Node.js
   const pipeline = await createResourcePipeline({
@@ -105,8 +108,14 @@ async function runResourceLoaderDemo() {
   console.log("✓ Gradient texture created");
 
   // Create geometry
-  const quadBuffer = new VertexBuffer(gl, GEOMETRY.quad.vertices, GEOMETRY.quad.stride);
-  console.log(`✓ Quad buffer created (${quadBuffer.getVertexCount()} vertices)`);
+  const quadBuffer = new VertexBuffer(
+    gl,
+    GEOMETRY.quad.vertices,
+    GEOMETRY.quad.stride,
+  );
+  console.log(
+    `✓ Quad buffer created (${quadBuffer.getVertexCount()} vertices)`,
+  );
 
   // Setup rendering
   shader.use();
@@ -121,7 +130,14 @@ async function runResourceLoaderDemo() {
   gl.enableVertexAttribArray(posAttr);
   gl.vertexAttribPointer(posAttr, 3, gl.FLOAT, false, GEOMETRY.quad.stride, 0);
   gl.enableVertexAttribArray(texCoordAttr);
-  gl.vertexAttribPointer(texCoordAttr, 2, gl.FLOAT, false, GEOMETRY.quad.stride, 3 * 4);
+  gl.vertexAttribPointer(
+    texCoordAttr,
+    2,
+    gl.FLOAT,
+    false,
+    GEOMETRY.quad.stride,
+    3 * 4,
+  );
 
   texture.bind(0);
   gl.uniform1i(textureUniform, 0);
@@ -142,14 +158,16 @@ async function runResourceLoaderDemo() {
     scaleMatrix(matrix, 0.4, 0.4, 1.0);
 
     if (matrixUniform) gl.uniformMatrix4fv(matrixUniform, false, matrix);
-    if (colorUniform) gl.uniform3f(colorUniform, quad.color[0], quad.color[1], quad.color[2]);
+    if (colorUniform)
+      gl.uniform3f(colorUniform, quad.color[0], quad.color[1], quad.color[2]);
     if (glowIntensityUniform) gl.uniform1f(glowIntensityUniform, quad.glow);
 
     gl.drawArrays(gl.TRIANGLES, 0, quadBuffer.getVertexCount());
   }
 
   // Capture and save frame
-  const renderingContext = gdevice.getRenderingContext() as NodeRenderingContext;
+  const renderingContext =
+    gdevice.getRenderingContext() as NodeRenderingContext;
   const pixelData = renderingContext.readPixels();
   const ppmPath = "./resource-loader-demo-output.ppm";
   savePPM(pixelData, 800, 600, ppmPath);
@@ -165,7 +183,12 @@ async function runResourceLoaderDemo() {
 }
 
 // Helper to save PPM file
-function savePPM(pixelData: Uint8Array, width: number, height: number, outputPath: string) {
+function savePPM(
+  pixelData: Uint8Array,
+  width: number,
+  height: number,
+  outputPath: string,
+) {
   const ppmHeader = `P6\n${width} ${height}\n255\n`;
   const ppmData = Buffer.alloc(3 * width * height);
 
@@ -185,7 +208,12 @@ function createIdentityMatrix(): Float32Array {
   return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 }
 
-function translateMatrix(mat: Float32Array, x: number, y: number, z: number): void {
+function translateMatrix(
+  mat: Float32Array,
+  x: number,
+  y: number,
+  z: number,
+): void {
   mat[12] += x;
   mat[13] += y;
   mat[14] += z;
@@ -274,6 +302,245 @@ const ACTIVE_SHADER: ShaderPreset = "PSYCHEDELIC";
 const shaderPreset = SHADER_LIBRARY[ACTIVE_SHADER];
 const vertexShaderSource = shaderPreset.vertex;
 const fragmentShaderSource = shaderPreset.fragment;
+
+// ============================================
+// Sprite Batch Renderer V2 Demo Function
+// ============================================
+async function runSpriteBatchRendererV2Demo() {
+  console.log("\n" + "=".repeat(60));
+  console.log("🎨 SPRITE BATCH RENDERER V2 DEMO (2.5D Sprites)");
+  console.log("=".repeat(60));
+
+  // Import necessary classes
+  const { SpriteBatchRenderer } = await import("./rendering/batch-renderer");
+
+  const gdevice = new GraphicsDevice(WIDTH, HEIGHT);
+  const gl = gdevice.getGLContext();
+  const renderingContext =
+    gdevice.getRenderingContext() as NodeRenderingContext;
+
+  // Create SDL window for live rendering
+  let sdlWindow: SDLWindow | null = null;
+  try {
+    sdlWindow = new SDLWindow(WIDTH, HEIGHT, "Bloody Engine - V2 Sprites");
+  } catch (error) {
+    console.warn("⚠ SDL window creation failed, running in headless mode");
+  }
+
+  console.log(`✓ Graphics device initialized (${WIDTH}x${HEIGHT})`);
+
+  // Import SHADERS_V2
+  const { SHADERS_V2 } = await import("./scene/scene");
+
+  // Create V2 shader with full attribute support
+  const shader = gdevice.createShader(SHADERS_V2.vertex, SHADERS_V2.fragment);
+  console.log("✓ V2 Shader compiled (supports color tint and texture index)");
+
+  // Create texture
+  const texture = Texture.createGradient(gl, 256, 256);
+  console.log("✓ Gradient texture created");
+
+  // Create sprite batch renderer (V2)
+  const spriteBatchRenderer = new SpriteBatchRenderer(gl, shader, 1000);
+  spriteBatchRenderer.setTexture(texture);
+  console.log("✓ Sprite batch renderer created (V2)");
+
+  // Animation state
+  let startTime = Date.now();
+  let frameCount = 0;
+  const maxFrames = 60; // Render 60 frames for demo
+
+  /**
+   * Create animated sprite quad instances with full V2 features
+   */
+  function getSpriteQuadsForFrame(elapsedSeconds: number) {
+    const quads = [];
+
+    // Sprite 1: Red, with alpha transparency, at z=-0.5 (background layer)
+    const angle1 = elapsedSeconds * 2;
+    quads.push({
+      x: 0,
+      y: 0,
+      z: -0.5,
+      width: 0.3,
+      height: 0.3,
+      rotation: angle1,
+      color: { r: 1, g: 0.2, b: 0.2, a: 0.7 },
+      texIndex: 0,
+    });
+
+    // Sprite 2: Green, orbital motion at z=0 (middle layer)
+    const angle2 = elapsedSeconds * 1.5;
+    const orbitRadius2 = 0.4;
+    quads.push({
+      x: Math.cos(angle2) * orbitRadius2,
+      y: Math.sin(angle2) * orbitRadius2,
+      z: 0,
+      width: 0.25,
+      height: 0.25,
+      rotation: -angle2,
+      color: { r: 0.2, g: 1, b: 0.2, a: 1 },
+      texIndex: 0,
+    });
+
+    // Sprite 3: Blue, different orbital pattern at z=0.5 (foreground layer)
+    const angle3 = elapsedSeconds * 0.8;
+    const orbitRadius3 = 0.5;
+    quads.push({
+      x: Math.cos(angle3 * 2) * orbitRadius3,
+      y: Math.sin(angle3) * orbitRadius3,
+      z: 0.5,
+      width: 0.2,
+      height: 0.2,
+      rotation: angle3 * 3,
+      color: { r: 0.2, g: 0.5, b: 1, a: 0.9 },
+      texIndex: 0,
+    });
+
+    // Sprite 4: Yellow, with UV rect selection (texture atlas demo)
+    const bounce = 0.3 * Math.sin(elapsedSeconds * 3);
+    quads.push({
+      x: -0.4,
+      y: bounce,
+      z: 0.2,
+      width: 0.2,
+      height: 0.2,
+      rotation: elapsedSeconds * 4,
+      color: { r: 1, g: 1, b: 0.2, a: 1 },
+      uvRect: { uMin: 0, vMin: 0, uMax: 0.5, vMax: 0.5 },
+      texIndex: 0,
+    });
+
+    // Sprite 5: Cyan, pulsing size with color animation
+    const pulse = 0.15 + 0.1 * Math.sin(elapsedSeconds * 2.5);
+    const pulseColor = 0.5 + 0.5 * Math.sin(elapsedSeconds * 3);
+    quads.push({
+      x: 0.4,
+      y: 0,
+      z: -0.2,
+      width: pulse,
+      height: pulse,
+      rotation: -elapsedSeconds,
+      color: { r: 0.2, g: pulseColor, b: pulseColor, a: 1 },
+      texIndex: 0,
+    });
+
+    // Sprite 6: Magenta, complex motion with different texIndex
+    const angle6 = elapsedSeconds * 1.2;
+    const r6 = 0.35 + 0.15 * Math.sin(elapsedSeconds * 2);
+    quads.push({
+      x: Math.cos(angle6) * r6,
+      y: Math.sin(angle6 * 2) * r6,
+      z: 0.3,
+      width: 0.18,
+      height: 0.18,
+      rotation: elapsedSeconds * 2.5,
+      color: { r: 1, g: 0.2, b: 1, a: 0.8 },
+      uvRect: { uMin: 0.5, vMin: 0.5, uMax: 1, vMax: 1 },
+      texIndex: 1,
+    });
+
+    return quads;
+  }
+
+  /**
+   * Render a single frame
+   */
+  function renderFrame() {
+    const now = Date.now();
+    const elapsedSeconds = (now - startTime) / 1000;
+
+    // Get sprite quads for this frame
+    const quads = getSpriteQuadsForFrame(elapsedSeconds);
+
+    // Clear batch
+    spriteBatchRenderer.clear();
+
+    // Add all quads to batch
+    for (const quad of quads) {
+      spriteBatchRenderer.addQuad(quad);
+    }
+
+    // Clear screen with dark background
+    gdevice.clear({ r: 0.1, g: 0.1, b: 0.12, a: 1.0 });
+
+    // Render batch
+    spriteBatchRenderer.render();
+
+    // Present frame
+    gdevice.present();
+
+    // Update SDL window
+    if (sdlWindow && sdlWindow.isOpen()) {
+      const pixelData = renderingContext.readPixels();
+      sdlWindow.updatePixels(pixelData);
+    }
+
+    frameCount++;
+  }
+
+  console.log(
+    `\nRendering ${maxFrames} frames (${(maxFrames / 6000).toFixed(1)}s)...`,
+  );
+
+  const frames = [];
+  const renderStart = Date.now();
+
+  // Render all frames
+  while (!sdlWindow || sdlWindow.isOpen()) {
+    renderFrame();
+
+    // Capture first frame for inspection
+    if (frameCount === 1) {
+      const pixelData = renderingContext.readPixels();
+      frames.push(Buffer.from(pixelData));
+    }
+
+    // Frame time control
+    await new Promise((resolve) => setTimeout(resolve, 16)); // ~60 FPS
+  }
+
+  const renderEnd = Date.now();
+  const renderTime = (renderEnd - renderStart) / 1000;
+  const avgFPS = frameCount / renderTime;
+
+  console.log(`✓ Rendered ${frameCount} frames in ${renderTime.toFixed(2)}s`);
+  console.log(`✓ Average FPS: ${avgFPS.toFixed(1)}`);
+  console.log(
+    `✓ Sprite batch renderer tested with ${spriteBatchRenderer.getQuadCount()} sprites`,
+  );
+
+  // Save first frame as PPM for inspection
+  if (frames.length > 0) {
+    const pixelData = frames[0];
+    const ppmHeader = `P6\n${WIDTH} ${HEIGHT}\n255\n`;
+    const ppmData = Buffer.alloc(3 * WIDTH * HEIGHT);
+
+    // Convert RGBA to RGB
+    for (let i = 0; i < WIDTH * HEIGHT; i++) {
+      const srcIdx = i * 4;
+      const dstIdx = i * 3;
+      ppmData[dstIdx] = pixelData[srcIdx]; // R
+      ppmData[dstIdx + 1] = pixelData[srcIdx + 1]; // G
+      ppmData[dstIdx + 2] = pixelData[srcIdx + 2]; // B
+    }
+
+    const ppmPath = "./sprite-batch-renderer-v2-demo.ppm";
+    fs.writeFileSync(ppmPath, ppmHeader);
+    fs.appendFileSync(ppmPath, ppmData);
+    console.log(`✓ First frame saved to ${ppmPath}`);
+  }
+
+  // Cleanup
+  spriteBatchRenderer.dispose();
+  gdevice.dispose();
+
+  if (sdlWindow) {
+    sdlWindow.cleanup();
+  }
+
+  console.log("✓ Sprite batch renderer demo complete!\n");
+}
 
 (async () => {
   try {
@@ -652,6 +919,11 @@ const fragmentShaderSource = shaderPreset.fragment;
     gdevice.dispose();
     console.log("✓ Graphics device disposed");
     console.log("\n=== Rendering Complete ===\n");
+
+    // ============================================
+    // Run Sprite Batch Renderer V2 Demo
+    // ============================================
+    await runSpriteBatchRendererV2Demo();
   } catch (error) {
     console.error("✗ Rendering failed:", error);
 

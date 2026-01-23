@@ -137,8 +137,10 @@ export const GEOMETRY = {
   },
 };
 
-// Shader sources
-export const SHADERS = {
+// ============================================================================
+// V1 Shaders (Basic - for backward compatibility)
+// ============================================================================
+export const SHADERS_V1 = {
   vertex: `
 attribute vec3 aPosition;
 attribute vec2 aTexCoord;
@@ -166,6 +168,52 @@ void main() {
 }
 `,
 };
+
+// ============================================================================
+// V2 Shaders (2.5D Sprite with color tint and texture atlas support)
+// ============================================================================
+export const SHADERS_V2 = {
+  vertex: `
+attribute vec3 aPosition;
+attribute vec2 aTexCoord;
+attribute vec4 aColor;
+attribute float aTexIndex;
+
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+uniform mat4 uMatrix;
+
+void main() {
+  gl_Position = uMatrix * vec4(aPosition, 1.0);
+  vTexCoord = aTexCoord;
+  vColor = aColor;
+  vTexIndex = aTexIndex;
+}
+`,
+
+  fragment: `
+precision mediump float;
+
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+uniform sampler2D uTexture;
+
+void main() {
+  // Sample texture
+  vec4 texColor = texture2D(uTexture, vTexCoord);
+
+  // Apply vertex color tint
+  gl_FragColor = texColor * vColor;
+}
+`,
+};
+
+// Alias for backward compatibility
+export const SHADERS = SHADERS_V1;
 
 // Texture config
 export const TEXTURE_CONFIG = {
