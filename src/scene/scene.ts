@@ -215,6 +215,110 @@ void main() {
 // Alias for backward compatibility
 export const SHADERS = SHADERS_V1;
 
+/**
+ * SHADERS_V3 - GPU-Based 2.5D Transformation
+ *
+ * This version moves the isometric projection from CPU to GPU.
+ * The vertex shader receives grid coordinates and transforms them to screen space.
+ *
+ * Attributes:
+ * - aGridPosition: Grid position (x, y) in world space
+ * - aZPosition: Z position for depth layering
+ * - aLocalOffset: Local offset from quad center (for rotation)
+ * - aTexCoord: Texture coordinates
+ * - aColor: Color tint
+ * - aTexIndex: Texture atlas index
+ *
+ * Uniforms:
+ * - uTileSize: Size of tiles (width, height) for isometric projection
+ * - uCamera: Camera position (x, y) and zoom
+ * - uRotation: Rotation angle in radians
+ * - uQuadSize: Size of the quad (width, height)
+ * - uZScale: Scale factor for Z height (vertical exaggeration)
+ * - uResolution: Screen resolution for NDC conversion
+ */
+export const SHADERS_V3 = {
+  vertex: `
+attribute vec2 aGridPosition;
+attribute float aZPosition;
+attribute vec2 aLocalOffset;
+attribute vec2 aTexCoord;
+attribute vec4 aColor;
+attribute float aTexIndex;
+
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+uniform vec2 uTileSize;
+uniform vec3 uCamera;
+uniform float uRotation;
+uniform vec2 uQuadSize;
+uniform float uZScale;
+uniform vec2 uResolution;
+
+void main() {
+  // Isometric projection: grid (x, y) -> screen (x, y)
+  // xscreen = (xgrid - ygrid) * tileWidth / 2
+  // yscreen = (xgrid + ygrid) * tileHeight / 2
+  vec2 isoScreen = vec2(
+    (aGridPosition.x - aGridPosition.y) * uTileSize.x * 0.5,
+    (aGridPosition.x + aGridPosition.y) * uTileSize.y * 0.5
+  );
+
+  // Apply rotation to local offset
+  float cosR = cos(uRotation);
+  float sinR = sin(uRotation);
+  vec2 rotatedOffset = vec2(
+    aLocalOffset.x * cosR - aLocalOffset.y * sinR,
+    aLocalOffset.x * sinR + aLocalOffset.y * cosR
+  ) * uQuadSize;
+
+  // Combine isometric screen position with rotated offset
+  vec2 worldPos = isoScreen + rotatedOffset;
+
+  // Subtract z-height from y position (height goes up in screen space, which is negative y)
+  worldPos.y -= aZPosition * uZScale;
+
+  // Apply camera transform
+  // Translation: subtract camera position
+  vec2 cameraPos = worldPos - uCamera.xy;
+
+  // Scale by zoom (zoom around camera center)
+  vec2 finalPos = cameraPos * uCamera.z;
+
+  // Convert to NDC (Normalized Device Coordinates)
+  // Center is (0, 0), range is [-1, 1]
+  vec2 ndc = finalPos / (uResolution * 0.5);
+
+  gl_Position = vec4(ndc, aZPosition * 0.001, 1.0);
+
+  // Pass through to fragment shader
+  vTexCoord = aTexCoord;
+  vColor = aColor;
+  vTexIndex = aTexIndex;
+}
+`,
+
+  fragment: `
+precision mediump float;
+
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+uniform sampler2D uTexture;
+
+void main() {
+  // Sample texture
+  vec4 texColor = texture2D(uTexture, vTexCoord);
+
+  // Apply vertex color tint
+  gl_FragColor = texColor * vColor;
+}
+`,
+};
+
 // Texture config
 export const TEXTURE_CONFIG = {
   size: 256,

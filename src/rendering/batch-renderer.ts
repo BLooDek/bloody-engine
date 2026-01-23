@@ -61,6 +61,9 @@ export interface SpriteQuadInstance {
   };
   /** Texture index for atlas selection */
   texIndex?: number;
+  /** Grid position for GPU-based transformation (optional) */
+  gridX?: number;
+  gridY?: number;
 }
 
 /**
@@ -687,6 +690,403 @@ export class SpriteBatchRenderer {
 
   /**
    * Dispose resources
+   */
+  dispose(): void {
+    if (this.vertexBuffer) {
+      this.gl.deleteBuffer(this.vertexBuffer);
+      this.vertexBuffer = null;
+    }
+  }
+}
+
+/**
+ * GPU-Based Sprite Batch Renderer (V3)
+ *
+ * This version moves the 2.5D transformation from CPU to GPU.
+ * The vertex shader handles isometric projection, rotation, and camera transform.
+ *
+ * Key differences from SpriteBatchRenderer (V2):
+ * - Stores grid position (gridX, gridY) instead of screen position (x, y)
+ * - Passes local offset to shader for GPU-based rotation
+ * - Shader handles isometric projection and camera transform
+ * - Reduced CPU overhead for transformation calculations
+ *
+ * Vertex Layout (12 floats per vertex):
+ * [0-1] GridPosition: gridX, gridY
+ * [2]   ZPosition:    z
+ * [3-4] LocalOffset:  localX, localY (quad corner offset)
+ * [5-6] TexCoord:     u, v
+ * [7-10] Color:       r, g, b, a
+ * [11]  TexIndex:     texture index
+ */
+export class GPUBasedSpriteBatchRenderer {
+  private gl: WebGLRenderingContext;
+  private shader: Shader;
+  private vertexBuffer: WebGLBuffer | null = null;
+  private maxQuads: number;
+  private vertexData: Float32Array;
+  private quads: SpriteQuadInstance[] = [];
+  private isDirty: boolean = false;
+  private verticesPerQuad = 6; // 2 triangles
+  private floatsPerVertex = 12; // gridX, gridY, z, localX, localY, u, v, r, g, b, a, texIndex
+  private texture: Texture | null = null;
+  private depthTestEnabled: boolean = true;
+
+  // Projection and camera settings
+  private tileSize: { width: number; height: number };
+  private zScale: number;
+  private resolution: { width: number; height: number };
+
+  /**
+   * Create a new GPU-based sprite batch renderer (V3)
+   * @param gl WebGL rendering context
+   * @param shader Shader program to use (should be SHADERS_V3)
+   * @param maxQuads Maximum number of quads to batch (default 1000)
+   * @param tileSize Tile size for isometric projection (default {width: 64, height: 32})
+   * @param zScale Scale factor for Z height (default 1.0)
+   */
+  constructor(
+    gl: WebGLRenderingContext,
+    shader: Shader,
+    maxQuads: number = 1000,
+    tileSize: { width: number; height: number } = { width: 64, height: 32 },
+    zScale: number = 1.0,
+  ) {
+    this.gl = gl;
+    this.shader = shader;
+    this.maxQuads = maxQuads;
+    this.tileSize = tileSize;
+    this.zScale = zScale;
+    this.resolution = { width: gl.canvas.width, height: gl.canvas.height };
+
+    // Allocate vertex data buffer
+    const totalFloats = maxQuads * this.verticesPerQuad * this.floatsPerVertex;
+    this.vertexData = new Float32Array(totalFloats);
+
+    // Create dynamic vertex buffer
+    const buf = gl.createBuffer();
+    if (!buf) {
+      throw new Error("Failed to create vertex buffer");
+    }
+    this.vertexBuffer = buf;
+
+    // Allocate buffer with dynamic draw usage
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, this.vertexData.byteLength, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  }
+
+  /**
+   * Set the texture for batch rendering
+   * @param texture The texture to use when rendering
+   */
+  setTexture(texture: Texture | null): void {
+    this.texture = texture;
+  }
+
+  /**
+   * Add a sprite quad to the batch
+   * If gridX and gridY are provided, uses GPU transformation.
+   * Otherwise, converts x, y to grid coordinates.
+   * @param quad Sprite quad instance to add
+   */
+  addQuad(quad: SpriteQuadInstance): void {
+    if (this.quads.length >= this.maxQuads) {
+      console.warn(`Sprite batch renderer at max capacity (${this.maxQuads})`);
+      return;
+    }
+    this.quads.push(quad);
+    this.isDirty = true;
+  }
+
+  /**
+   * Clear all quads from the batch
+   */
+  clear(): void {
+    this.quads = [];
+    this.isDirty = true;
+  }
+
+  /**
+   * Get number of quads currently in batch
+   */
+  getQuadCount(): number {
+    return this.quads.length;
+  }
+
+  /**
+   * Update the batch - rebuilds vertex buffer if quads changed
+   */
+  update(): void {
+    if (!this.isDirty || this.quads.length === 0) {
+      return;
+    }
+
+    let vertexIndex = 0;
+
+    for (const quad of this.quads) {
+      // Extract properties with defaults
+      const {
+        x,
+        y,
+        z = 0,
+        width,
+        height,
+        color = { r: 1, g: 1, b: 1, a: 1 },
+        uvRect = { uMin: 0, vMin: 0, uMax: 1, vMax: 1 },
+        texIndex = 0,
+        gridX,
+        gridY,
+      } = quad;
+
+      // Use grid position if provided, otherwise convert x,y to grid coordinates
+      // For screen-space coordinates, approximate inverse isometric projection
+      let gx: number, gy: number;
+      if (gridX !== undefined && gridY !== undefined) {
+        gx = gridX;
+        gy = gridY;
+      } else {
+        // Inverse isometric approximation for backward compatibility
+        // This is a simplified conversion - for precise grid positioning,
+        // use gridX/gridY parameters directly
+        gx = (x / (this.tileSize.width * 0.5) + y / (this.tileSize.height * 0.5)) * 0.5;
+        gy = (y / (this.tileSize.height * 0.5) - x / (this.tileSize.width * 0.5)) * 0.5;
+      }
+
+      // Define quad corners in local space (2 triangles = 6 vertices)
+      const halfW = width / 2;
+      const halfH = height / 2;
+      const corners = [
+        [-halfW, -halfH], // bottom-left
+        [halfW, -halfH], // bottom-right
+        [halfW, halfH], // top-right
+        [halfW, halfH], // top-right (duplicate)
+        [-halfH, halfH], // top-left
+        [-halfW, -halfH], // bottom-left (duplicate)
+      ];
+
+      // Define texture coordinates for each corner
+      const texCoords = [
+        [uvRect.uMin, uvRect.vMin],
+        [uvRect.uMax, uvRect.vMin],
+        [uvRect.uMax, uvRect.vMax],
+        [uvRect.uMax, uvRect.vMax],
+        [uvRect.uMin, uvRect.vMax],
+        [uvRect.uMin, uvRect.vMin],
+      ];
+
+      // Generate vertices
+      for (let i = 0; i < corners.length; i++) {
+        const [localX, localY] = corners[i];
+        const [u, v] = texCoords[i];
+
+        this.vertexData[vertexIndex++] = gx; // gridX
+        this.vertexData[vertexIndex++] = gy; // gridY
+        this.vertexData[vertexIndex++] = z; // zPosition
+        this.vertexData[vertexIndex++] = localX; // localOffsetX
+        this.vertexData[vertexIndex++] = localY; // localOffsetY
+        this.vertexData[vertexIndex++] = u; // texCoordU
+        this.vertexData[vertexIndex++] = v; // texCoordV
+        this.vertexData[vertexIndex++] = color.r;
+        this.vertexData[vertexIndex++] = color.g;
+        this.vertexData[vertexIndex++] = color.b;
+        this.vertexData[vertexIndex++] = color.a;
+        this.vertexData[vertexIndex++] = texIndex;
+      }
+    }
+
+    // Upload data to GPU
+    if (this.vertexBuffer) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
+      this.gl.bufferSubData(
+        this.gl.ARRAY_BUFFER,
+        0,
+        this.vertexData.subarray(0, vertexIndex),
+      );
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+    }
+
+    this.isDirty = false;
+  }
+
+  /**
+   * Set whether depth testing is enabled
+   * @param enabled Whether to enable depth testing (default true)
+   */
+  setDepthTestEnabled(enabled: boolean): void {
+    this.depthTestEnabled = enabled;
+  }
+
+  /**
+   * Render the batch with GPU-based transformation
+   * @param camera Camera for view transform
+   */
+  render(camera: Camera): void {
+    if (this.quads.length === 0) {
+      return;
+    }
+
+    // Update vertex buffer if needed
+    this.update();
+
+    // Use shader
+    this.shader.use();
+
+    // Enable depth testing for proper 2.5D layering
+    if (this.depthTestEnabled) {
+      this.gl.enable(this.gl.DEPTH_TEST);
+      this.gl.depthFunc(this.gl.LEQUAL);
+    } else {
+      this.gl.disable(this.gl.DEPTH_TEST);
+    }
+
+    // Bind vertex buffer
+    if (this.vertexBuffer) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.vertexBuffer);
+
+      const stride = this.floatsPerVertex * 4; // stride in bytes
+
+      // Get attribute locations and configure pointers
+      const attrs = {
+        gridPosition: this.shader.getAttributeLocation("aGridPosition"),
+        zPosition: this.shader.getAttributeLocation("aZPosition"),
+        localOffset: this.shader.getAttributeLocation("aLocalOffset"),
+        texCoord: this.shader.getAttributeLocation("aTexCoord"),
+        color: this.shader.getAttributeLocation("aColor"),
+        texIndex: this.shader.getAttributeLocation("aTexIndex"),
+      };
+
+      // Grid position (vec2)
+      if (attrs.gridPosition !== -1) {
+        this.gl.enableVertexAttribArray(attrs.gridPosition);
+        this.gl.vertexAttribPointer(
+          attrs.gridPosition,
+          2,
+          this.gl.FLOAT,
+          false,
+          stride,
+          0,
+        );
+      }
+
+      // Z position (float)
+      if (attrs.zPosition !== -1) {
+        this.gl.enableVertexAttribArray(attrs.zPosition);
+        this.gl.vertexAttribPointer(
+          attrs.zPosition,
+          1,
+          this.gl.FLOAT,
+          false,
+          stride,
+          2 * 4,
+        );
+      }
+
+      // Local offset (vec2)
+      if (attrs.localOffset !== -1) {
+        this.gl.enableVertexAttribArray(attrs.localOffset);
+        this.gl.vertexAttribPointer(
+          attrs.localOffset,
+          2,
+          this.gl.FLOAT,
+          false,
+          stride,
+          3 * 4,
+        );
+      }
+
+      // Texture coordinates (vec2)
+      if (attrs.texCoord !== -1) {
+        this.gl.enableVertexAttribArray(attrs.texCoord);
+        this.gl.vertexAttribPointer(
+          attrs.texCoord,
+          2,
+          this.gl.FLOAT,
+          false,
+          stride,
+          5 * 4,
+        );
+      }
+
+      // Color (vec4)
+      if (attrs.color !== -1) {
+        this.gl.enableVertexAttribArray(attrs.color);
+        this.gl.vertexAttribPointer(
+          attrs.color,
+          4,
+          this.gl.FLOAT,
+          false,
+          stride,
+          7 * 4,
+        );
+      }
+
+      // Texture index (float)
+      if (attrs.texIndex !== -1) {
+        this.gl.enableVertexAttribArray(attrs.texIndex);
+        this.gl.vertexAttribPointer(
+          attrs.texIndex,
+          1,
+          this.gl.FLOAT,
+          false,
+          stride,
+          11 * 4,
+        );
+      }
+
+      // Bind texture if available
+      if (this.texture) {
+        this.texture.bind(0);
+        const textureUniform = this.shader.getUniformLocation("uTexture");
+        if (textureUniform !== null) {
+          this.gl.uniform1i(textureUniform, 0);
+        }
+      }
+
+      // Set GPU transformation uniforms
+      const tileSizeUniform = this.shader.getUniformLocation("uTileSize");
+      if (tileSizeUniform !== null) {
+        this.gl.uniform2f(tileSizeUniform, this.tileSize.width, this.tileSize.height);
+      }
+
+      const cameraUniform = this.shader.getUniformLocation("uCamera");
+      if (cameraUniform !== null) {
+        this.gl.uniform3f(cameraUniform, camera.x, camera.y, camera.zoom);
+      }
+
+      const zScaleUniform = this.shader.getUniformLocation("uZScale");
+      if (zScaleUniform !== null) {
+        this.gl.uniform1f(zScaleUniform, this.zScale);
+      }
+
+      const resolutionUniform = this.shader.getUniformLocation("uResolution");
+      if (resolutionUniform !== null) {
+        this.gl.uniform2f(resolutionUniform, this.resolution.width, this.resolution.height);
+      }
+
+      // For now, set rotation to 0 (rotation is handled per-quad via local offset)
+      // TODO: Add per-quad rotation support via uniform or additional attribute
+      const rotationUniform = this.shader.getUniformLocation("uRotation");
+      if (rotationUniform !== null) {
+        this.gl.uniform1f(rotationUniform, 0.0);
+      }
+
+      const quadSizeUniform = this.shader.getUniformLocation("uQuadSize");
+      if (quadSizeUniform !== null) {
+        this.gl.uniform2f(quadSizeUniform, 1.0, 1.0); // Scale handled by local offset
+      }
+
+      // Draw all quads
+      const vertexCount = this.quads.length * this.verticesPerQuad;
+      this.gl.drawArrays(this.gl.TRIANGLES, 0, vertexCount);
+
+      // Cleanup
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+    }
+  }
+
+  /**
+   * Clean up GPU resources
    */
   dispose(): void {
     if (this.vertexBuffer) {

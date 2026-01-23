@@ -115,6 +115,9 @@ export interface SpriteQuadInstance {
   };
   /** Texture index for atlas selection */
   texIndex?: number;
+  /** Grid position for GPU-based transformation (optional) */
+  gridX?: number;
+  gridY?: number;
 }
 
 /**
