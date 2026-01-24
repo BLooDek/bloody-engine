@@ -1,7 +1,15 @@
 import { defineConfig } from "vite";
 import path from "path";
+import dts from "vite-plugin-dts";
 
 export default defineConfig({
+  plugins: [
+    dts({
+      include: ["src/**/*"],
+      outDir: "dist/web",
+      insertTypesEntry: true,
+    }),
+  ],
   build: {
     outDir: "dist/web",
     target: "es2020",
@@ -27,6 +35,7 @@ export default defineConfig({
         globals: {},
       },
     },
+    emptyOutDir: true,
   },
   resolve: {
     alias: {
