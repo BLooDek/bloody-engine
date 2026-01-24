@@ -19,6 +19,19 @@ export { Shader } from "./core/shader";
 export { Texture } from "./core/texture";
 export type { ITexture } from "./core/texture";
 
+// Sprite and atlas system
+export {
+  Sprite,
+  TextureAtlas,
+  AtlasLoader,
+} from "./core/sprite-atlas";
+export type {
+  UVRect,
+  PixelRect,
+  SpriteInfo,
+  AtlasOptions,
+} from "./core/sprite-atlas";
+
 // Texture loading (Node.js only)
 export type {
   TextureLoadResult,
