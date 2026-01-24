@@ -1,10 +1,34 @@
 {
   "name": "bloody-engine",
   "version": "1.0.0",
-  "description": "A WebGL-based graphics engine",
+  "description": "A WebGL-based 2.5D graphics engine for isometric rendering",
   "license": "MIT",
-  "main": "dist/node/index.js",
   "type": "module",
+  "main": "dist/node/index.js",
+  "types": "./dist/web/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BLooDek/bloody-engine.git"
+  },
+  "keywords": [
+    "webgl",
+    "graphics",
+    "engine",
+    "2.5d",
+    "isometric",
+    "rendering",
+    "game-engine",
+    "typescript"
+  ],
+  "bugs": {
+    "url": "https://github.com/BLooDek/bloody-engine/issues"
+  },
+  "homepage": "https://github.com/BLooDek/bloody-engine#readme",
   "exports": {
     ".": {
       "types": "./dist/web/index.d.ts",

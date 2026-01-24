@@ -7,12 +7,12 @@
  * - Smooth animation with moving sprites
  */
 
-import { GraphicsDevice } from "./grahpic-device";
-import { BatchRenderer, type QuadInstance } from "./batch-renderer";
+import { GraphicsDevice } from "../core/grahpic-device";
+import { BatchRenderer, type QuadInstance } from "../rendering/batch-renderer";
 import { Texture } from "../core/texture";
 import { SCENE_CONFIG, SHADERS } from "../scene/scene";
 import { SDLWindow } from "../platforms/node/sdl-window";
-import { NodeRenderingContext } from "./node-context";
+import { NodeRenderingContext } from "../platforms/node/node-context";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
