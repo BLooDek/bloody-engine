@@ -14,6 +14,7 @@ import type { Shader } from "../core/shader";
 import type { Texture } from "../core/texture";
 import type { Camera } from "./camera";
 import { DepthSorter } from "./spatial-hash";
+import { Matrix4 } from "./camera";
 
 /**
  * V1 Quad instance data (for backward compatibility)
@@ -256,9 +257,7 @@ export class BatchRenderer {
       // Set up view matrix from camera (or identity if no camera)
       const matrixUniform = this.shader.getUniformLocation("uMatrix");
       if (matrixUniform !== null) {
-        const matrix = camera ? camera.getViewMatrix() : new Float32Array([
-          1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-        ]);
+        const matrix = camera ? camera.getViewMatrix() : Matrix4.identity();
         this.gl.uniformMatrix4fv(matrixUniform, false, matrix);
       }
 
@@ -622,9 +621,7 @@ export class SpriteBatchRenderer {
       // Set up view matrix from camera (or identity if no camera)
       const matrixUniform = this.shader.getUniformLocation("uMatrix");
       if (matrixUniform !== null) {
-        const matrix = camera ? camera.getViewMatrix() : new Float32Array([
-          1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-        ]);
+        const matrix = camera ? camera.getViewMatrix() : Matrix4.identity();
         this.gl.uniformMatrix4fv(matrixUniform, false, matrix);
       }
 

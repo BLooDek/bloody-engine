@@ -5,22 +5,25 @@
  * for offsetting global rendering position.
  */
 
+import type { Matrix4Pool } from '../core/matrix-pool.js';
+import { getGlobalPool } from '../core/matrix-pool.js';
+
 /**
  * Matrix4 utilities for 2D camera transformations
  * Matrices are stored in column-major order (WebGL convention)
+ *
+ * All static methods support optional pool parameter for object pooling.
+ * If no pool is provided, uses the global pool by default.
  */
 export class Matrix4 {
   /**
    * Create an identity matrix
+   * @param pool Optional pool to use (defaults to global pool)
    * @returns 4x4 identity matrix in column-major order
    */
-  static identity(): Float32Array {
-    return new Float32Array([
-      1, 0, 0, 0,  // column 0
-      0, 1, 0, 0,  // column 1
-      0, 0, 1, 0,  // column 2
-      0, 0, 0, 1,  // column 3
-    ]);
+  static identity(pool?: Matrix4Pool): Float32Array {
+    const target = pool ?? getGlobalPool();
+    return target.acquireIdentity();
   }
 
   /**
@@ -28,15 +31,12 @@ export class Matrix4 {
    * @param x Translation along X axis
    * @param y Translation along Y axis
    * @param z Translation along Z axis (default 0)
+   * @param pool Optional pool to use (defaults to global pool)
    * @returns 4x4 translation matrix in column-major order
    */
-  static translation(x: number, y: number, z: number = 0): Float32Array {
-    return new Float32Array([
-      1, 0, 0, 0,   // column 0
-      0, 1, 0, 0,   // column 1
-      0, 0, 1, 0,   // column 2
-      x, y, z, 1,   // column 3
-    ]);
+  static translation(x: number, y: number, z: number = 0, pool?: Matrix4Pool): Float32Array {
+    const target = pool ?? getGlobalPool();
+    return target.acquireTranslation(x, y, z);
   }
 
   /**
@@ -44,25 +44,24 @@ export class Matrix4 {
    * @param x Scale factor along X axis
    * @param y Scale factor along Y axis
    * @param z Scale factor along Z axis (default 1)
+   * @param pool Optional pool to use (defaults to global pool)
    * @returns 4x4 scale matrix in column-major order
    */
-  static scale(x: number, y: number, z: number = 1): Float32Array {
-    return new Float32Array([
-      x, 0, 0, 0,   // column 0
-      0, y, 0, 0,   // column 1
-      0, 0, z, 0,   // column 2
-      0, 0, 0, 1,   // column 3
-    ]);
+  static scale(x: number, y: number, z: number = 1, pool?: Matrix4Pool): Float32Array {
+    const target = pool ?? getGlobalPool();
+    return target.acquireScale(x, y, z);
   }
 
   /**
    * Multiply two matrices (result = a * b)
    * @param a First matrix (left operand)
    * @param b Second matrix (right operand)
+   * @param pool Optional pool to use (defaults to global pool)
    * @returns Result of matrix multiplication in column-major order
    */
-  static multiply(a: Float32Array, b: Float32Array): Float32Array {
-    const result = new Float32Array(16);
+  static multiply(a: Float32Array, b: Float32Array, pool?: Matrix4Pool): Float32Array {
+    const targetPool = pool ?? getGlobalPool();
+    const result = targetPool.acquireMatrix();
 
     // Matrix multiplication in column-major order
     // result[i][j] = sum(a[k][j] * b[i][k]) for k = 0..3
@@ -89,15 +88,23 @@ export class Matrix4 {
    * @param x Camera X position (translation will be negative)
    * @param y Camera Y position (translation will be negative)
    * @param zoom Camera zoom level (1.0 = no zoom, >1 = zoom in, <1 = zoom out)
+   * @param pool Optional pool to use (defaults to global pool)
    * @returns 4x4 view matrix in column-major order
    */
-  static createViewMatrix(x: number, y: number, zoom: number): Float32Array {
+  static createViewMatrix(x: number, y: number, zoom: number, pool?: Matrix4Pool): Float32Array {
+    const targetPool = pool ?? getGlobalPool();
     // First translate to negate camera position
-    const translation = Matrix4.translation(-x, -y, 0);
+    const translation = Matrix4.translation(-x, -y, 0, targetPool);
     // Then scale by zoom
-    const scale = Matrix4.scale(zoom, zoom, 1);
+    const scale = Matrix4.scale(zoom, zoom, 1, targetPool);
     // View = T * S (apply scale first, then translation)
-    return Matrix4.multiply(translation, scale);
+    const result = Matrix4.multiply(translation, scale, targetPool);
+
+    // Release intermediate matrices
+    targetPool.releaseMatrix(translation);
+    targetPool.releaseMatrix(scale);
+
+    return result;
   }
 }
 
@@ -111,17 +118,35 @@ export class Camera {
   private _zoom: number;
   private _viewMatrix: Float32Array | null = null;
   private _viewMatrixDirty: boolean = true;
+  private _pool: Matrix4Pool | undefined;
 
   /**
    * Create a new camera
    * @param x Initial X position (default 0)
    * @param y Initial Y position (default 0)
    * @param zoom Initial zoom level (default 1.0)
+   * @param pool Optional pool to use for matrix allocations
    */
-  constructor(x: number = 0, y: number = 0, zoom: number = 1.0) {
+  constructor(x: number = 0, y: number = 0, zoom: number = 1.0, pool?: Matrix4Pool) {
     this._x = x;
     this._y = y;
     this._zoom = zoom;
+    this._pool = pool;
+  }
+
+  /**
+   * Set the pool to use for matrix allocations
+   * @param pool Pool to use, or undefined to use global pool
+   */
+  setPool(pool?: Matrix4Pool): void {
+    this._pool = pool;
+  }
+
+  /**
+   * Get the current pool (or undefined if using global pool)
+   */
+  getPool(): Matrix4Pool | undefined {
+    return this._pool;
   }
 
   /**
@@ -208,6 +233,12 @@ export class Camera {
     this._x = 0;
     this._y = 0;
     this._zoom = 1.0;
+    // Release old matrix if exists
+    if (this._viewMatrix) {
+      const pool = this._pool ?? getGlobalPool();
+      pool.releaseMatrix(this._viewMatrix);
+      this._viewMatrix = null;
+    }
     this._viewMatrixDirty = true;
   }
 
@@ -220,7 +251,13 @@ export class Camera {
    */
   getViewMatrix(): Float32Array {
     if (this._viewMatrixDirty || this._viewMatrix === null) {
-      this._viewMatrix = Matrix4.createViewMatrix(this._x, this._y, this._zoom);
+      // Release old matrix if using pool
+      if (this._viewMatrix) {
+        const pool = this._pool ?? getGlobalPool();
+        pool.releaseMatrix(this._viewMatrix);
+      }
+      // Create new using pool (or global pool if no custom pool)
+      this._viewMatrix = Matrix4.createViewMatrix(this._x, this._y, this._zoom, this._pool);
       this._viewMatrixDirty = false;
     }
     return this._viewMatrix;

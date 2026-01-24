@@ -69,6 +69,13 @@ export type { SpriteVertex } from "./rendering/vertex";
 // Camera system
 export { Camera, Matrix4 } from "./rendering/camera";
 
+// Object pooling for performance optimization
+export { ObjectPool } from "./core/object-pool";
+export type { ObjectPoolConfig, PoolStats } from "./core/object-pool";
+
+export { Matrix4Pool, getGlobalPool, setGlobalPool, resetGlobalPool } from "./core/matrix-pool";
+export type { Matrix4PoolConfig } from "./core/matrix-pool";
+
 // Projection system
 export { ProjectionConfig } from "./rendering/projection";
 export type { GridCoord, ScreenCoord, FractionalGridCoord } from "./rendering/projection";
