@@ -128,3 +128,15 @@ export type {
   WebSocketLike,
   NetworkInputSourceOptions,
 } from "./input";
+
+// Simulation system (pure game logic, zero rendering code)
+export {
+  Entity,
+  EntityManager,
+  SimulationLoop,
+} from "./simulation";
+export type {
+  EntityState,
+  EntityQuery,
+  SimulationConfig,
+} from "./simulation";
