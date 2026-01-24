@@ -384,13 +384,178 @@ console.log(`Screen: x=${screenPos.xscreen}, y=${screenPos.yscreen}`);
 const gridPos2 = screenToGrid(screenPos, config);
 ```
 
+### Texture Atlas for Sprite Sheets
+
+```typescript
+import { TextureAtlas, AtlasLoader } from 'bloody-engine';
+
+// Load sprite atlas
+const atlas = await AtlasLoader.loadFromJSON(gl, 'atlas.json');
+
+// Get sprite info
+const sprite = atlas.getSprite('player_idle_01');
+
+// Use UV rect for rendering
+batchRenderer.addQuad({
+  x: 100, y: 100, z: 0,
+  width: sprite.pixelRect.width,
+  height: sprite.pixelRect.height,
+  uvRect: sprite.uvRect
+});
+```
+
+## Advanced Examples
+
+### Networked Game Architecture
+
+```typescript
+import {
+  SimulationLoop,
+  Entity,
+  ClientPredictor,
+  ServerReconciler,
+  StateSnapshot,
+  Ticker
+} from 'bloody-engine';
+
+// Server-side simulation
+const serverSim = new SimulationLoop({
+  fixedDeltaTime: 1 / 60
+});
+
+// Client-side prediction
+const clientPredictor = createClientPredictor({
+  maxPredictedTicks: 100
+});
+
+// Server reconciliation
+const serverReconciler = createServerReconciler({
+  maxRewindTicks: 50
+});
+
+// Game loop on client
+const ticker = new Ticker({ targetFPS: 60 });
+ticker.start({
+  update: (deltaTime) => {
+    // 1. Collect input and send to server
+    const input = collectInput();
+    socket.send({ type: 'input', input, tick: currentTick });
+
+    // 2. Predict locally
+    clientPredictor.addLocalInput(currentTick, input);
+    const predictedState = predictState();
+
+    // 3. Handle server updates
+    onServerUpdate = (update) => {
+      clientPredictor.reconcile(update);
+    };
+  },
+  render: (interpolation) => {
+    renderGame(clientPredictor.getLatestState(), interpolation);
+  }
+});
+```
+
+### Deterministic Simulation Testing
+
+```typescript
+import { SimulationLoop, Entity } from 'bloody-engine';
+
+// Create two simulations for testing determinism
+const sim1 = new SimulationLoop({ fixedDeltaTime: 1 / 60, seed: 12345 });
+const sim2 = new SimulationLoop({ fixedDeltaTime: 1 / 60, seed: 12345 });
+
+// Add identical entities
+sim1.addEntity(new Entity({ id: '1', x: 0, y: 0 }));
+sim2.addEntity(new Entity({ id: '1', x: 0, y: 0 }));
+
+// Run simulations
+for (let i = 0; i < 1000; i++) {
+  sim1.update(1 / 60);
+  sim2.update(1 / 60);
+}
+
+// Verify determinism
+const state1 = sim1.getStateSnapshot();
+const state2 = sim2.getStateSnapshot();
+console.log('Deterministic:', JSON.stringify(state1) === JSON.stringify(state2));
+```
+
+## Testing
+
+The engine includes comprehensive tests for determinism and visual regression:
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test suites
+npm run test:determinism    # Test simulation determinism
+npm run test:visual         # Visual regression tests
+npm run test:state-sync     # State synchronization tests
+npm run test:coverage       # Generate coverage report
+```
+
 ## Dependencies
 
 - **gl** - Headless WebGL for Node.js
 - **@kmamal/sdl** - SDL2 bindings for window and input management
 - **pngjs** - PNG image decoding
 
+## Platform Support
+
+| Platform | Status | Notes |
+|----------|--------|-------|
+| Node.js (Linux) | ✅ Full | Headless rendering + SDL window |
+| Node.js (macOS) | ✅ Full | Headless rendering + SDL window |
+| Node.js (Windows) | ✅ Full | Headless rendering + SDL window |
+| Browser | ⚠️ Planned | WebGL rendering planned |
+
 ## Documentation
+
+### Source Code Organization
+
+```
+src/
+├── core/              # Core graphics and utilities
+│   ├── grahpic-device.ts
+│   ├── shader.ts
+│   ├── texture.ts
+│   ├── buffer.ts
+│   ├── object-pool.ts
+│   └── ticker.ts
+├── rendering/         # Rendering systems
+│   ├── batch-renderer.ts
+│   ├── camera.ts
+│   ├── projection.ts
+│   └── spatial-hash.ts
+├── input/             # Input system (command queue)
+│   ├── command-queue.ts
+│   ├── sdl-input-source.ts
+│   └── network-input-source.ts
+├── simulation/        # Game logic simulation
+│   ├── entity.ts
+│   ├── entity-manager.ts
+│   └── simulation-loop.ts
+├── networking/        # Networking for multiplayer
+│   ├── client-predictor.ts
+│   ├── server-reconciler.ts
+│   ├── state-snapshot.ts
+│   └── binary-serializer.ts
+└── platforms/
+    └── node/          # Node.js-specific implementations
+        ├── node-context.ts
+        ├── node-resource-loader.ts
+        └── sdl-window.ts
+```
+
+### Key Concepts
+
+- **Separation of Concerns**: Rendering, input, simulation, and networking are completely separate systems
+- **Deterministic Simulation**: Game logic runs in fixed timestep for consistency across clients
+- **Command Pattern**: All input goes through a command queue for easy recording/replay
+- **Client-Side Prediction**: Reduces perceived lag in networked games
+- **Object Pooling**: Minimizes garbage collection for smooth performance
 
 For detailed documentation and architecture, see [docs/README.MD](docs/README.MD).
 
