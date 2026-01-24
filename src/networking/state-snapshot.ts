@@ -11,6 +11,8 @@
 import type { Entity } from "../simulation/entity";
 import type { EntityState } from "../simulation/entity";
 import type { EntityStateSnapshot } from "./network-types";
+import { BinarySerializer, BinaryReader } from "./binary-serializer";
+import { EntitySerializer } from "./entity-serializer";
 
 /**
  * Snapshot creation options
@@ -208,9 +210,6 @@ export class StateSnapshot implements EntityStateSnapshot {
    * Serialize snapshot to binary format
    */
   toBinary(): Uint8Array {
-    // Lazy import to avoid circular dependency
-    const { BinarySerializer } = require("./binary-serializer");
-
     const serializer = new BinarySerializer();
 
     // Write tick number
@@ -227,9 +226,6 @@ export class StateSnapshot implements EntityStateSnapshot {
       // Write entity ID
       serializer.writeString(entityId);
 
-      // Lazy import EntitySerializer
-      const { EntitySerializer } = require("./entity-serializer");
-
       // Serialize entity state
       const stateData = EntitySerializer.serializeEntityState(state);
       serializer.writeBytes(stateData);
@@ -242,10 +238,6 @@ export class StateSnapshot implements EntityStateSnapshot {
    * Deserialize snapshot from binary format
    */
   static fromBinary(data: Uint8Array): StateSnapshot {
-    // Lazy import
-    const { BinaryReader } = require("./binary-serializer");
-    const { EntitySerializer } = require("./entity-serializer");
-
     const reader = new BinaryReader(data);
 
     // Read tick number
