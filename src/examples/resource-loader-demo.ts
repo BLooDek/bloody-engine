@@ -359,9 +359,12 @@ function scaleMatrix(mat: Float32Array, x: number, y: number, z: number): void {
   mat[10] *= z;
 }
 
-// Auto-run in browser
+// Auto-run disabled for npm package
+// To run the demo locally, uncomment the following:
+/*
 if (typeof window !== "undefined") {
   runBrowserResourceLoaderDemo().catch((error) => {
     console.error("❌ Demo failed:", error);
   });
 }
+*/
