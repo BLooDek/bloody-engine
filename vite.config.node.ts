@@ -6,6 +6,7 @@ export default defineConfig({
   plugins: [
     dts({
       include: ["src/**/*"],
+      exclude: ["src/**/*.test.ts", "src/tests/**/*"],
       outDir: "dist/node",
       insertTypesEntry: true,
     }),

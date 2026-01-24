@@ -1,15 +1,19 @@
 # Bloody Engine
 
-A WebGL-based 2.5D graphics engine for isometric rendering on Node.js, written in TypeScript. Designed for server-side rendering and headless graphics processing.
+A WebGL-based 2.5D graphics engine for isometric rendering on Node.js, written in TypeScript. Designed for server-side rendering, headless graphics processing, and networked multiplayer games.
 
 ## Features
 
-- **2.5D Rendering** - Optimized for isometric and dimetric projections
+- **2.5D Rendering** - Optimized for isometric and dimetric projections with depth sorting
 - **Server-Side Rendering** - Headless WebGL rendering on Node.js using `gl` and `@kmamal/sdl`
 - **Batch Rendering** - Efficient sprite batching with GPU-accelerated transformations
-- **Resource Management** - Unified asset loading pipeline for textures and resources
+- **Resource Management** - Unified asset loading pipeline for textures and shaders
+- **Input System** - Command queue pattern supporting SDL and network input sources
+- **Networking** - Client-side prediction, server reconciliation, and state synchronization
+- **Simulation** - Pure game logic simulation system with entity management
+- **Game Loop** - Fixed timestep ticker for deterministic game logic
 - **TypeScript** - Fully typed for excellent developer experience
-- **Depth Sorting** - Proper 2.5D occlusion handling
+- **Object Pooling** - Memory-efficient object reuse patterns
 - **Window Management** - SDL-based window creation for interactive applications
 
 ## Installation
@@ -18,15 +22,73 @@ A WebGL-based 2.5D graphics engine for isometric rendering on Node.js, written i
 npm install bloody-engine
 ```
 
+## API Overview
+
+### Core Graphics
+
+| Class | Description |
+|-------|-------------|
+| [GraphicsDevice](src/core/grahpic-device.ts) | Main graphics device with WebGL context management |
+| [Shader](src/core/shader.ts) | Shader program compilation and uniform/attribute management |
+| [Texture](src/core/texture.ts) | Texture creation, binding, and management |
+| [VertexBuffer](src/core/buffer.ts) / [IndexBuffer](src/core/buffer.ts) | GPU buffer management for geometry |
+| [Camera](src/rendering/camera.ts) | 2D camera with position, zoom, and view matrix |
+
+### Rendering
+
+| Class | Description |
+|-------|-------------|
+| [BatchRenderer](src/rendering/batch-renderer.ts) | Generic quad batch rendering |
+| [SpriteBatchRenderer](src/rendering/batch-renderer.ts) | Sprite-specific batch renderer with depth sorting |
+| [ProjectionConfig](src/rendering/projection.ts) | Isometric/dimetric projection utilities |
+| [SpatialHash](src/rendering/spatial-hash.ts) | Spatial partitioning for efficient queries |
+
+### Resource Loading
+
+| Class | Description |
+|-------|-------------|
+| [NodeResourceLoader](src/platforms/node/node-resource-loader.ts) | File system resource loader for Node.js |
+| [NodeTextureLoader](src/platforms/node/node-texture-loader.ts) | PNG texture loading for Node.js |
+| [ResourcePipeline](src/core/resource-pipeline.ts) | Batch resource loading with caching |
+| [TextureAtlas](src/core/sprite-atlas.ts) | Sprite atlas packing and UV coordinate management |
+
+### Input System
+
+| Class | Description |
+|-------|-------------|
+| [CommandQueue](src/input/command-queue.ts) | Thread-safe command queue for input |
+| [SDLInputSource](src/input/sdl-input-source.ts) | SDL keyboard/mouse input |
+| [NetworkInputSource](src/input/networking-input-source.ts) | Network-based input for multiplayer |
+
+### Simulation & Networking
+
+| Class | Description |
+|-------|-------------|
+| [Ticker](src/core/ticker.ts) | Fixed timestep game loop |
+| [Entity](src/simulation/entity.ts) / [EntityManager](src/simulation/entity-manager.ts) | Entity component system |
+| [SimulationLoop](src/simulation/simulation-loop.ts) | Deterministic game logic simulation |
+| [ClientPredictor](src/networking/client-predictor.ts) | Client-side prediction for lag compensation |
+| [ServerReconciler](src/networking/server-reconciler.ts) | Server-side reconciliation |
+| [StateSnapshot](src/networking/state-snapshot.ts) | World state serialization |
+| [BinarySerializer](src/networking/binary-serializer.ts) | Efficient binary serialization |
+
+### Utilities
+
+| Class | Description |
+|-------|-------------|
+| [ObjectPool](src/core/object-pool.ts) | Generic object pooling for GC optimization |
+| [Matrix4Pool](src/core/matrix-pool.ts) | Matrix4 specific pooling |
+| [lerp](src/core/interpolation.ts), [lerpVec2](src/core/interpolation.ts), [lerpVec3](src/core/interpolation.ts) | Interpolation utilities |
+
 ## Quick Start
 
+### Basic Rendering Setup
+
 ```typescript
-import { GraphicsDevice, Shader, Texture } from 'bloody-engine';
+import { GraphicsDevice, Shader, Texture, VertexBuffer } from 'bloody-engine';
 
-// Create a graphics device with SDL window
+// Create graphics device (800x600)
 const device = new GraphicsDevice(800, 600);
-
-// Get the WebGL context
 const gl = device.getGLContext();
 
 // Create a shader
@@ -46,67 +108,280 @@ const shader = device.createShader(`
   }
 `);
 
-// Create a texture from PNG
-const { PNG } = require('pngjs');
-const fs = require('fs/promises');
-const pngData = await fs.readFile('texture.png');
-const png = PNG.sync.read(pngData);
-const texture = Texture.createFromPNG(gl, png);
+// Create a gradient texture
+const texture = Texture.createGradient(gl, 256, 256);
 
-// Render
+// Create geometry
+const vertices = new Float32Array([
+  // x, y, z, u, v
+  -0.5, -0.5, 0, 0, 1,
+   0.5, -0.5, 0, 1, 1,
+   0.5,  0.5, 0, 1, 0,
+  -0.5, -0.5, 0, 0, 1,
+   0.5,  0.5, 0, 1, 0,
+  -0.5,  0.5, 0, 0, 0
+]);
+const buffer = new VertexBuffer(gl, vertices, 20); // 5 floats * 4 bytes
+
+// Setup and render
 device.clear({ r: 0.1, g: 0.1, b: 0.1, a: 1.0 });
 shader.use();
-// ... rendering code ...
+buffer.bind();
+// ... configure attributes ...
+gl.drawArrays(gl.TRIANGLES, 0, buffer.getVertexCount());
 device.present();
-
-// For headless rendering, capture the output
-const context = device.getRenderingContext();
-const pixels = context.readPixels();
 ```
 
-## Examples
-
-### Sprite Batch Rendering
+### Sprite Batch Rendering with Camera
 
 ```typescript
-import { SpriteBatchRenderer, Camera, Texture } from 'bloody-engine';
+import { SpriteBatchRenderer, Camera, Texture, GraphicsDevice } from 'bloody-engine';
 
+const device = new GraphicsDevice(800, 600);
+const gl = device.getGLContext();
+
+// Create shader (use built-in V2 shader for sprites)
+const shader = device.createShader(vertexSource, fragmentSource);
+
+// Create sprite batch renderer (capacity: 1000 sprites)
 const batchRenderer = new SpriteBatchRenderer(gl, shader, 1000);
-const camera = new Camera(0, 0, 1.0);
+batchRenderer.setTexture(Texture.createGradient(gl, 256, 256));
 
-// Add sprites
+// Create camera
+const camera = new Camera(0, 0, 1.0); // x=0, y=0, zoom=1x
+
+// Add sprites to batch
 batchRenderer.addQuad({
-  x: 100,
-  y: 100,
-  z: 0,
-  width: 64,
-  height: 64,
+  x: 100, y: 100, z: 0,
+  width: 64, height: 64,
   rotation: 0,
   color: { r: 1, g: 1, b: 1, a: 1 },
-  uvRect: { uMin: 0, vMin: 0, uMax: 1, vMax: 1 }
+  texIndex: 0
 });
 
-// Render
+// Render with camera
+device.clear({ r: 0.1, g: 0.1, b: 0.1, a: 1.0 });
 batchRenderer.render(camera);
+device.present();
 ```
 
 ### Resource Loading
 
 ```typescript
-import { NodeResourceLoader } from 'bloody-engine';
+import {
+  ResourceLoaderFactory,
+  createResourcePipeline,
+  NodeTextureLoader
+} from 'bloody-engine';
 
-const loader = new NodeResourceLoader('./assets');
+// Create resource pipeline
+const pipeline = await createResourcePipeline({
+  concurrency: 5,
+  cache: true,
+  baseDir: process.cwd()
+});
 
-// Load a shader
-const vertexSource = await loader.load('shaders/basic.vert');
-const fragmentSource = await loader.load('shaders/basic.frag');
-
-// Batch load multiple resources
-const { succeeded, failed } = await loader.loadMultiple([
-  'textures/sprite1.png',
-  'textures/sprite2.png',
-  'shaders/shader.vert'
+// Load shaders
+const shaders = await pipeline.loadShaders([
+  { name: 'basic', vertex: 'shaders/basic.vert', fragment: 'shaders/basic.frag' }
 ]);
+
+// Batch load resources
+const { succeeded, failed } = await pipeline.loadMultiple([
+  'textures/sprite1.png',
+  'textures/sprite2.png'
+]);
+
+// Load texture from PNG
+const textureLoader = new NodeTextureLoader();
+const texture = await textureLoader.loadTexture(gl, 'textures/sprite.png');
+```
+
+### Game Loop with Fixed Timestep
+
+```typescript
+import { Ticker, type TickerConfig } from 'bloody-engine';
+
+const config: TickerConfig = {
+  targetFPS: 60,
+  fixedDeltaTime: 1 / 60, // 60 physics updates per second
+  maxFrameTime: 0.25 // Prevent spiral of death
+};
+
+const ticker = new Ticker(config);
+
+ticker.start({
+  update: (deltaTime) => {
+    // Game logic update (fixed timestep)
+    console.log(`Update: ${deltaTime.toFixed(3)}s`);
+  },
+  render: (interpolation) => {
+    // Render with interpolation factor
+    console.log(`Render: interpolation=${interpolation.toFixed(3)}`);
+  }
+});
+
+// Get performance metrics
+const metrics = ticker.getMetrics();
+console.log(`FPS: ${metrics.fps}, Delta Time: ${metrics.deltaTime}s`);
+```
+
+### Entity System
+
+```typescript
+import { Entity, EntityManager, type EntityState } from 'bloody-engine';
+
+// Create entity
+const entity = new Entity({
+  id: 'player-1',
+  x: 0, y: 0, z: 0,
+  rotation: 0,
+  type: 'player',
+  health: 100
+});
+
+// Create entity manager
+const manager = new EntityManager();
+manager.add(entity);
+
+// Query entities
+const players = manager.query({ type: 'player' });
+const nearby = manager.queryInRegion(0, 0, 100);
+
+// Update entity
+entity.x += 10;
+entity.updatedAt = Date.now();
+manager.update(entity);
+```
+
+### Input System with Command Queue
+
+```typescript
+import {
+  CommandQueue,
+  SDLInputSource,
+  createSDLInputSource,
+  CommandType
+} from 'bloody-engine';
+
+// Create command queue
+const queue = new CommandQueue();
+
+// Create SDL input source (requires SDL window)
+const sdlWindow = new SDLWindow(800, 600, 'Game');
+const inputSource = createSDLInputSource(sdlWindow, {
+  keyMapping: {
+    moveUp: ['w', 'arrowup'],
+    moveDown: ['s', 'arrowdown'],
+    moveLeft: ['a', 'arrowleft'],
+    moveRight: ['d', 'arrowright']
+  }
+});
+
+// Process input in game loop
+while (running) {
+  // Collect input commands
+  inputSource.update(queue);
+
+  // Process commands
+  while (queue.hasCommands()) {
+    const command = queue.dequeue();
+    switch (command.type) {
+      case CommandType.Move:
+        handleMove(command);
+        break;
+      case CommandType.Attack:
+        handleAttack(command);
+        break;
+    }
+  }
+}
+```
+
+### Networking - Client-Side Prediction
+
+```typescript
+import {
+  createClientPredictor,
+  ClientPredictor,
+  type ClientInputMessage
+} from 'bloody-engine';
+
+// Create predictor with config
+const predictor = createClientPredictor({
+  maxPredictedTicks: 100,
+  reconciliationDelay: 100 // ms
+});
+
+// Client loop: send input
+const onInput = (input: MoveCommand) => {
+  const tick = currentTick;
+  predictor.addLocalInput(tick, input);
+
+  // Send to server
+  socket.send(JSON.stringify({
+    type: 'client_input',
+    tick,
+    input
+  } as ClientInputMessage));
+};
+
+// Receive server update
+const onServerUpdate = (message: ServerStateUpdateMessage) => {
+  const result = predictor.reconcile(message);
+
+  if (result.corrected) {
+    console.log(`Reconciled: corrected=${result.corrected}, error=${result.error}`);
+  }
+};
+```
+
+### Object Pooling for Performance
+
+```typescript
+import { ObjectPool, type ObjectPoolConfig } from 'bloody-engine';
+
+// Create pool for Vector3 objects
+const pool = new ObjectPool<Vector3>({
+  initialSize: 100,
+  growthFactor: 2,
+  factory: () => ({ x: 0, y: 0, z: 0 }),
+  reset: (obj) => { obj.x = 0; obj.y = 0; obj.z = 0; }
+});
+
+// Acquire from pool
+const vec = pool.acquire();
+vec.x = 10; vec.y = 20; vec.z = 30;
+
+// Return to pool when done
+pool.release(vec);
+
+// Get pool statistics
+const stats = pool.getStats();
+console.log(`Size: ${stats.size}, Active: ${stats.active}, Hits: ${stats.hits}`);
+```
+
+### Isometric Projection
+
+```typescript
+import { ProjectionConfig, gridToScreen, screenToGrid } from 'bloody-engine';
+
+// Configure isometric projection
+const config = new ProjectionConfig({
+  tileWidth: 64,
+  tileHeight: 32,
+  angle: Math.PI / 6, // 30 degrees
+  screenWidth: 800,
+  screenHeight: 600
+});
+
+// Convert grid to screen coordinates
+const gridPos = { xgrid: 5, ygrid: 3, zheight: 0 };
+const screenPos = gridToScreen(gridPos, config);
+console.log(`Screen: x=${screenPos.xscreen}, y=${screenPos.yscreen}`);
+
+// Convert screen to grid coordinates
+const gridPos2 = screenToGrid(screenPos, config);
 ```
 
 ## Dependencies

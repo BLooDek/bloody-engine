@@ -192,6 +192,47 @@ export class EntityManager {
   }
 
   /**
+   * Serialize all entities to binary format for efficient network transmission
+   * @returns Binary representation of all entities
+   */
+  async serializeAllBinary(): Promise<Uint8Array> {
+    // Dynamic import to avoid circular dependency
+    const { EntitySerializer } = await import("../networking/entity-serializer");
+    const entities = this.getAllEntities();
+    return EntitySerializer.serializeEntities(entities);
+  }
+
+  /**
+   * Deserialize and add entities from binary format
+   * @param data Binary representation of entities
+   * @returns New EntityManager with deserialized entities
+   */
+  static async deserializeAllBinary(data: Uint8Array): Promise<EntityManager> {
+    // Dynamic import to avoid circular dependency
+    const { EntitySerializer } = await import("../networking/entity-serializer");
+    const entities = await EntitySerializer.deserializeEntities(data);
+    const manager = new EntityManager();
+    for (const entity of entities) {
+      manager.addEntity(entity);
+    }
+    return manager;
+  }
+
+  /**
+   * Restore entity states from a snapshot map
+   * Used for server reconciliation
+   * @param snapshot Map of entity ID to state
+   */
+  restoreSnapshot(snapshot: Map<string, import("./entity").EntityState>): void {
+    for (const [id, state] of snapshot.entries()) {
+      const entity = this.entities.get(id);
+      if (entity) {
+        entity.restoreState(state);
+      }
+    }
+  }
+
+  /**
    * Get statistics about entities
    */
   getStats(): { total: number; byType: Record<string, number> } {

@@ -12,7 +12,7 @@ import {
   ProjectionConfig,
   type GridCoord,
   type ScreenCoord,
-} from "./rendering/projection";
+} from "../rendering/projection";
 
 // Test configuration
 const testConfig = new ProjectionConfig(64, 32, 1.0);

@@ -167,4 +167,50 @@ export class Entity {
     const entity = new Entity(parsed.id, parsed.type, parsed.state);
     return entity;
   }
+
+  /**
+   * Serialize entity state to binary format for efficient network transmission
+   * @returns Binary representation of this entity
+   */
+  async serializeBinary(): Promise<Uint8Array> {
+    // Dynamic import to avoid circular dependency
+    const { EntitySerializer } = await import("../networking/entity-serializer");
+    return EntitySerializer.serializeEntity(this);
+  }
+
+  /**
+   * Deserialize entity from binary format
+   * @param data Binary representation of an entity
+   * @returns Deserialized entity
+   */
+  static async deserializeBinary(data: Uint8Array): Promise<Entity> {
+    // Dynamic import to avoid circular dependency
+    const { EntitySerializer } = await import("../networking/entity-serializer");
+    return EntitySerializer.deserializeEntity(data);
+  }
+
+  /**
+   * Restore entity state from a provided state object
+   * Used for server reconciliation and state restoration
+   * @param state The state to restore
+   */
+  restoreState(state: EntityState): void {
+    this._state = {
+      ...state,
+      gridPos: { ...state.gridPos },
+      velocity: { ...state.velocity },
+    };
+  }
+
+  /**
+   * Get a deep copy of the current entity state
+   * Useful for creating snapshots without reference sharing
+   */
+  getStateCopy(): EntityState {
+    return {
+      ...this._state,
+      gridPos: { ...this._state.gridPos },
+      velocity: { ...this._state.velocity },
+    };
+  }
 }
