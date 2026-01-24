@@ -13,6 +13,7 @@
 import type { Shader } from "../core/shader";
 import type { Texture } from "../core/texture";
 import type { Camera } from "./camera";
+import { DepthSorter } from "./spatial-hash";
 
 /**
  * V1 Quad instance data (for backward compatibility)
@@ -352,21 +353,25 @@ export class SpriteBatchRenderer {
   private floatsPerVertex = 10; // x, y, z, u, v, r, g, b, a, texIndex
   private texture: Texture | null = null;
   private depthTestEnabled: boolean = true;
+  private depthSorter: DepthSorter;
 
   /**
    * Create a new sprite batch renderer (V2)
    * @param gl WebGL rendering context
    * @param shader Shader program to use (should be SHADERS_V2)
    * @param maxQuads Maximum number of quads to batch (default 1000)
+   * @param spatialCellSize Cell size for spatial hashing (default 64)
    */
   constructor(
     gl: WebGLRenderingContext,
     shader: Shader,
     maxQuads: number = 1000,
+    spatialCellSize: number = 64,
   ) {
     this.gl = gl;
     this.shader = shader;
     this.maxQuads = maxQuads;
+    this.depthSorter = new DepthSorter({ cellSize: spatialCellSize });
 
     // Allocate vertex data buffer
     // Each quad has 6 vertices, each vertex has 10 floats
@@ -423,36 +428,21 @@ export class SpriteBatchRenderer {
   }
 
   /**
-   * Calculate sort key for depth sorting using Painter's Algorithm
-   * Formula: SortKey = X_grid + Y_grid + Z_grid
-   * This ensures proper draw order for 2.5D isometric rendering
-   * @private
-   */
-  private calculateSortKey(quad: SpriteQuadInstance): number {
-    // Use grid position if available, otherwise use world position as grid coordinates
-    const gridX = quad.gridX ?? quad.x;
-    const gridY = quad.gridY ?? quad.y;
-    const z = quad.z ?? 0;
-
-    // Simple Y-based sorting (fallback/basic approach)
-    // This works for simple scenes without complex overlapping geometry
-    return gridX + gridY + z;
-  }
-
-  /**
    * Sort quads by depth using Painter's Algorithm
    * Quads are sorted from back-to-front so closer objects are drawn last (on top)
+   *
+   * Uses spatial hashing and topological sort for:
+   * - Fast spatial queries (O(1) cell lookups)
+   * - Reduced pairwise comparisons (only checks nearby objects)
+   * - Proper handling of complex overlapping geometry
    */
   sortQuadsByDepth(): void {
     if (this.quads.length <= 1) {
       return;
     }
 
-    this.quads.sort((a, b) => {
-      const sortKeyA = this.calculateSortKey(a);
-      const sortKeyB = this.calculateSortKey(b);
-      return sortKeyA - sortKeyB;
-    });
+    // Use DepthSorter with spatial hashing and topological sort
+    this.quads = this.depthSorter.sortQuads(this.quads);
   }
 
   /**
@@ -767,6 +757,7 @@ export class GPUBasedSpriteBatchRenderer {
   private floatsPerVertex = 12; // gridX, gridY, z, localX, localY, u, v, r, g, b, a, texIndex
   private texture: Texture | null = null;
   private depthTestEnabled: boolean = true;
+  private depthSorter: DepthSorter;
 
   // Projection and camera settings
   private tileSize: { width: number; height: number };
@@ -780,6 +771,7 @@ export class GPUBasedSpriteBatchRenderer {
    * @param maxQuads Maximum number of quads to batch (default 1000)
    * @param tileSize Tile size for isometric projection (default {width: 64, height: 32})
    * @param zScale Scale factor for Z height (default 1.0)
+   * @param spatialCellSize Cell size for spatial hashing (default 64)
    */
   constructor(
     gl: WebGLRenderingContext,
@@ -787,6 +779,7 @@ export class GPUBasedSpriteBatchRenderer {
     maxQuads: number = 1000,
     tileSize: { width: number; height: number } = { width: 64, height: 32 },
     zScale: number = 1.0,
+    spatialCellSize: number = 64,
   ) {
     this.gl = gl;
     this.shader = shader;
@@ -794,6 +787,7 @@ export class GPUBasedSpriteBatchRenderer {
     this.tileSize = tileSize;
     this.zScale = zScale;
     this.resolution = { width: gl.canvas.width, height: gl.canvas.height };
+    this.depthSorter = new DepthSorter({ cellSize: spatialCellSize });
 
     // Allocate vertex data buffer
     const totalFloats = maxQuads * this.verticesPerQuad * this.floatsPerVertex;
@@ -851,36 +845,21 @@ export class GPUBasedSpriteBatchRenderer {
   }
 
   /**
-   * Calculate sort key for depth sorting using Painter's Algorithm
-   * Formula: SortKey = X_grid + Y_grid + Z_grid
-   * This ensures proper draw order for 2.5D isometric rendering
-   * @private
-   */
-  private calculateSortKey(quad: SpriteQuadInstance): number {
-    // Use grid position if available, otherwise use world position as grid coordinates
-    const gridX = quad.gridX ?? quad.x;
-    const gridY = quad.gridY ?? quad.y;
-    const z = quad.z ?? 0;
-
-    // Simple Y-based sorting (fallback/basic approach)
-    // This works for simple scenes without complex overlapping geometry
-    return gridX + gridY + z;
-  }
-
-  /**
    * Sort quads by depth using Painter's Algorithm
    * Quads are sorted from back-to-front so closer objects are drawn last (on top)
+   *
+   * Uses spatial hashing and topological sort for:
+   * - Fast spatial queries (O(1) cell lookups)
+   * - Reduced pairwise comparisons (only checks nearby objects)
+   * - Proper handling of complex overlapping geometry
    */
   sortQuadsByDepth(): void {
     if (this.quads.length <= 1) {
       return;
     }
 
-    this.quads.sort((a, b) => {
-      const sortKeyA = this.calculateSortKey(a);
-      const sortKeyB = this.calculateSortKey(b);
-      return sortKeyA - sortKeyB;
-    });
+    // Use DepthSorter with spatial hashing and topological sort
+    this.quads = this.depthSorter.sortQuads(this.quads);
   }
 
   /**
