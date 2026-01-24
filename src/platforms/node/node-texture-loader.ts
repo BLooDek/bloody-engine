@@ -86,8 +86,8 @@ export class NodeTextureLoader {
       // Parse the PNG using pngjs
       const png = PNG.sync.read(buffer);
 
-      // Get the pixel data
-      let data = png.data;
+      // Get the pixel data as Uint8Array
+      let data: Uint8Array = png.data;
 
       // Flip the image vertically if requested
       if (flipY) {
