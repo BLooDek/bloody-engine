@@ -99,3 +99,32 @@ export type {
 
 // Scene system
 export type { VisualizationEntity } from "./scene/scene";
+
+// Input system (Command Queue Pattern)
+export {
+  CommandQueue,
+  InputSource,
+  SDLInputSource,
+  NetworkInputSource,
+  createSDLInputSource,
+  createNetworkInputSource,
+  CommandType,
+} from "./input";
+export type {
+  Direction,
+  BaseCommand,
+  MoveCommand,
+  AttackCommand,
+  SelectCommand,
+  InteractCommand,
+  Command,
+  RawInputEvent,
+  NormalizedCommand,
+  InputSourceFactory,
+  KeyMapping,
+  SDLKeyboardEvent,
+  SDLMouseEvent,
+  NetworkCommand,
+  WebSocketLike,
+  NetworkInputSourceOptions,
+} from "./input";
