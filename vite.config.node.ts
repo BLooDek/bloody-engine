@@ -1,7 +1,15 @@
 import { defineConfig } from "vite";
 import path from "path";
+import dts from "vite-plugin-dts";
 
 export default defineConfig({
+  plugins: [
+    dts({
+      include: ["src/**/*"],
+      outDir: "dist/node",
+      insertTypesEntry: true,
+    }),
+  ],
   // Explicitly set to Node.js environment
   mode: "production",
   build: {
@@ -22,6 +30,7 @@ export default defineConfig({
     },
     // Ensure SSR build mode for Node.js
     ssr: true,
+    emptyOutDir: true,
   },
   resolve: {
     alias: {

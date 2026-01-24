@@ -1,12 +1,11 @@
 // Core graphics device
 export { GraphicsDevice } from "./core/grahpic-device";
 
-// Rendering context interface and implementations
+// Rendering context interface and Node.js implementation
 export type {
   RenderingContext,
   RenderingContextOptions,
 } from "./rendering/rendering-context";
-export { BrowserRenderingContext } from "./platforms/browser/browser-context";
 export { NodeRenderingContext } from "./platforms/node/node-context";
 export { RenderingContextFactory } from "./rendering/rendering-context-factory";
 
@@ -36,16 +35,13 @@ export { Camera, Matrix4 } from "./rendering/camera";
 export { ProjectionConfig } from "./rendering/projection";
 export type { GridCoord, ScreenCoord, FractionalGridCoord } from "./rendering/projection";
 
-// Resource loading
+// Resource loading (Node.js only)
 export type {
   IResourceLoader,
   ResourceLoadResult,
   ResourceLoadOptions,
   BatchLoadResult,
 } from "./core/resource-loader";
-export {
-  BrowserResourceLoader,
-} from "./platforms/browser/browser-resource-loader";
 export { NodeResourceLoader } from "./platforms/node/node-resource-loader";
 export {
   ResourceLoaderFactory,
@@ -65,6 +61,3 @@ export type {
 
 // Scene system
 export type { VisualizationEntity } from "./scene/scene";
-
-// Examples
-export { runBrowserResourceLoaderDemo } from "./examples/resource-loader-demo";
