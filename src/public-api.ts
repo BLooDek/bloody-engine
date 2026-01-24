@@ -10,6 +10,9 @@ export { BrowserRenderingContext } from "./platforms/browser/browser-context";
 export { NodeRenderingContext } from "./platforms/node/node-context";
 export { RenderingContextFactory } from "./rendering/rendering-context-factory";
 
+// SDL Window for Node.js platform
+export { SDLWindow } from "./platforms/node/sdl-window";
+
 // Shader abstraction
 export { Shader } from "./core/shader";
 
@@ -20,11 +23,18 @@ export { Texture } from "./core/texture";
 export { VertexBuffer, IndexBuffer } from "./core/buffer";
 
 // Batch rendering
-export { BatchRenderer, SpriteBatchRenderer } from "./rendering/batch-renderer";
+export { BatchRenderer, SpriteBatchRenderer, GPUBasedSpriteBatchRenderer } from "./rendering/batch-renderer";
 export type { QuadInstance, SpriteQuadInstance } from "./rendering/batch-renderer";
+
+// Vertex structures
+export type { SpriteVertex } from "./rendering/vertex";
 
 // Camera system
 export { Camera, Matrix4 } from "./rendering/camera";
+
+// Projection system
+export { ProjectionConfig } from "./rendering/projection";
+export type { GridCoord, ScreenCoord, FractionalGridCoord } from "./rendering/projection";
 
 // Resource loading
 export type {
@@ -52,6 +62,9 @@ export type {
   NamedShaderSource,
   ResourcePipelineOptions,
 } from "./core/resource-pipeline";
+
+// Scene system
+export type { VisualizationEntity } from "./scene/scene";
 
 // Examples
 export { runBrowserResourceLoaderDemo } from "./examples/resource-loader-demo";
