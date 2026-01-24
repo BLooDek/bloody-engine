@@ -109,10 +109,7 @@ export class ResourcePipeline {
    * @param options Optional loading options
    * @returns Promise resolving to the resource content
    */
-  async load(
-    path: string,
-    options?: ResourceLoadOptions,
-  ): Promise<string> {
+  async load(path: string, options?: ResourceLoadOptions): Promise<string> {
     // Check cache first
     const cached = this.cache.get(path);
     if (cached !== undefined) {
@@ -240,10 +237,7 @@ export class ResourcePipeline {
    * @param options Optional loading options
    * @returns Promise resolving when all resources are loaded
    */
-  async preload(
-    paths: string[],
-    options?: ResourceLoadOptions,
-  ): Promise<void> {
+  async preload(paths: string[], options?: ResourceLoadOptions): Promise<void> {
     await this.loadBatch(paths, options);
   }
 
@@ -327,9 +321,7 @@ export async function createResourcePipeline(
   const { ResourceLoaderFactory } = await import("./resource-loader-factory");
 
   const loader = await ResourceLoaderFactory.create({
-    baseUrl: options?.baseUrl,
     baseDir: options?.baseDir,
-    timeout: options?.timeout,
   });
 
   return new ResourcePipeline(loader, options);

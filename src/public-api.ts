@@ -17,6 +17,14 @@ export { Shader } from "./core/shader";
 
 // Texture management
 export { Texture } from "./core/texture";
+export type { ITexture } from "./core/texture";
+
+// Texture loading (Node.js only)
+export type {
+  TextureLoadResult,
+  TextureLoadOptions,
+} from "./platforms/node/node-texture-loader";
+export { NodeTextureLoader } from "./platforms/node/node-texture-loader";
 
 // Buffer management
 export { VertexBuffer, IndexBuffer } from "./core/buffer";

@@ -1,8 +1,41 @@
 /**
+ * Texture interface
+ * Defines the contract for texture implementations, wrapping the raw WebGL texture
+ * handle and metadata (width/height)
+ */
+export interface ITexture {
+  /**
+   * Bind this texture to a texture unit
+   * @param unit Texture unit (0-7 typically)
+   */
+  bind(unit?: number): void;
+
+  /**
+   * Unbind texture
+   */
+  unbind(): void;
+
+  /**
+   * Get the underlying WebGL texture handle
+   */
+  getHandle(): WebGLTexture;
+
+  /**
+   * Get texture dimensions
+   */
+  getDimensions(): { width: number; height: number };
+
+  /**
+   * Clean up texture resources
+   */
+  dispose(): void;
+}
+
+/**
  * Texture abstraction layer
  * Handles texture creation, loading, and binding across environments
  */
-export class Texture {
+export class Texture implements ITexture {
   private texture: WebGLTexture;
   private gl: WebGLRenderingContext;
   private width: number;

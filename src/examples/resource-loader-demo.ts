@@ -58,11 +58,6 @@ export async function runBrowserResourceLoaderDemo(): Promise<void> {
   const env = ResourceLoaderFactory.detectEnvironment();
   console.log(`✓ Environment detected: ${env}`);
 
-  if (env !== Environment.BROWSER) {
-    console.warn("⚠ This demo is designed for browser environment");
-    return;
-  }
-
   // Create resource pipeline
   console.log("\n1. Creating Resource Pipeline...");
   const pipeline = await createResourcePipeline({
@@ -298,12 +293,7 @@ void main() {
         gl.uniformMatrix4fv(matrixUniform, false, matrix);
       }
       if (colorUniform) {
-        gl.uniform3f(
-          colorUniform,
-          quad.color[0],
-          quad.color[1],
-          quad.color[2],
-        );
+        gl.uniform3f(colorUniform, quad.color[0], quad.color[1], quad.color[2]);
       }
       if (glowIntensityUniform) {
         const pulse = quad.glow + Math.sin(elapsedSeconds * 2) * 0.3;
@@ -337,9 +327,7 @@ void main() {
  * Simple matrix utilities (for demo purposes)
  */
 function createIdentityMatrix(): Float32Array {
-  return new Float32Array([
-    1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
-  ]);
+  return new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 }
 
 function translateMatrix(
