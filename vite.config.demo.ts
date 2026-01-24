@@ -2,25 +2,22 @@ import { defineConfig } from "vite";
 import path from "path";
 
 export default defineConfig({
-  // Explicitly set to Node.js environment
   mode: "production",
   build: {
-    outDir: "dist/node",
+    outDir: "dist/demo",
     target: "node18",
     lib: {
-      entry: path.resolve(__dirname, "src/index.ts"),
+      entry: path.resolve(__dirname, "src/demo-node.ts"),
       formats: ["es"],
       fileName: () => "index.js",
     },
     rollupOptions: {
-      // Externalize graphics libraries - Node.js built-ins will be bundled
-      external: ["gl", "@kmamal/sdl"],
+      external: ["gl", "@kmamal/sdl", "pngjs"],
       output: {
         format: "es",
         entryFileNames: "[name].js",
       },
     },
-    // Ensure SSR build mode for Node.js
     ssr: true,
   },
   resolve: {

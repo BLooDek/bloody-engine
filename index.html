@@ -40,7 +40,7 @@
   </head>
   <body>
     <script type="module">
-      import("./dist/web/index.js").catch((err) => {
+      import("./src/core/index.js").catch((err) => {
         console.error("Failed to load renderer:", err);
         document.body.innerHTML += `<p style="color: red;">Failed to load renderer: ${err.message}</p>`;
       });

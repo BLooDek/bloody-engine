@@ -1,15 +1,15 @@
 /**
- * Bloody Engine - Resource Loader Demo (Browser Entry Point)
+ * Bloody Engine - Browser Entry Point
  *
- * This is the main browser entry point that demonstrates:
- * - Loading shader source code from external files
- * - Using ResourcePipeline for async resource management
- * - Caching and batch loading
- *
- * Run this in a browser with proper MIME type support for .vert and .frag files.
- * You may need to configure your web server to serve these files with the correct MIME types.
+ * Demo is disabled by default for npm package.
+ * To run the demo locally, uncomment the code below or run:
+ *   npm run dev
  */
 
+// Demo code disabled for published npm package
+// To enable the demo locally, uncomment the following:
+
+/*
 import { runBrowserResourceLoaderDemo } from "../examples/resource-loader-demo";
 
 // Guard to prevent double execution
@@ -33,3 +33,4 @@ if (!(window as any)[DEMO_STARTED_KEY]) {
     `;
   });
 }
+*/
