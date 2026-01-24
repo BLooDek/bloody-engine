@@ -1,6 +1,23 @@
 // Core graphics device
 export { GraphicsDevice } from "./core/grahpic-device";
 
+// Ticker system (unified game loop with fixed timestep)
+export { Ticker } from "./core/ticker";
+export type {
+  TickerConfig,
+  TickerState,
+  TickerMetrics,
+} from "./core/ticker-config";
+
+// Interpolation utilities
+export {
+  lerp,
+  lerpVec2,
+  lerpVec3,
+  lerpAngle,
+  StateBuffer,
+} from "./core/interpolation";
+
 // Rendering context interface and Node.js implementation
 export type {
   RenderingContext,
