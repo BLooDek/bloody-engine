@@ -423,6 +423,39 @@ export class SpriteBatchRenderer {
   }
 
   /**
+   * Calculate sort key for depth sorting using Painter's Algorithm
+   * Formula: SortKey = X_grid + Y_grid + Z_grid
+   * This ensures proper draw order for 2.5D isometric rendering
+   * @private
+   */
+  private calculateSortKey(quad: SpriteQuadInstance): number {
+    // Use grid position if available, otherwise use world position as grid coordinates
+    const gridX = quad.gridX ?? quad.x;
+    const gridY = quad.gridY ?? quad.y;
+    const z = quad.z ?? 0;
+
+    // Simple Y-based sorting (fallback/basic approach)
+    // This works for simple scenes without complex overlapping geometry
+    return gridX + gridY + z;
+  }
+
+  /**
+   * Sort quads by depth using Painter's Algorithm
+   * Quads are sorted from back-to-front so closer objects are drawn last (on top)
+   */
+  sortQuadsByDepth(): void {
+    if (this.quads.length <= 1) {
+      return;
+    }
+
+    this.quads.sort((a, b) => {
+      const sortKeyA = this.calculateSortKey(a);
+      const sortKeyB = this.calculateSortKey(b);
+      return sortKeyA - sortKeyB;
+    });
+  }
+
+  /**
    * Update the batch - rebuilds vertex buffer if quads changed
    */
   update(): void {
@@ -505,6 +538,9 @@ export class SpriteBatchRenderer {
     if (this.quads.length === 0) {
       return;
     }
+
+    // Sort quads by depth before rendering (Painter's Algorithm)
+    this.sortQuadsByDepth();
 
     // Update vertex buffer if needed
     this.update();
@@ -815,6 +851,39 @@ export class GPUBasedSpriteBatchRenderer {
   }
 
   /**
+   * Calculate sort key for depth sorting using Painter's Algorithm
+   * Formula: SortKey = X_grid + Y_grid + Z_grid
+   * This ensures proper draw order for 2.5D isometric rendering
+   * @private
+   */
+  private calculateSortKey(quad: SpriteQuadInstance): number {
+    // Use grid position if available, otherwise use world position as grid coordinates
+    const gridX = quad.gridX ?? quad.x;
+    const gridY = quad.gridY ?? quad.y;
+    const z = quad.z ?? 0;
+
+    // Simple Y-based sorting (fallback/basic approach)
+    // This works for simple scenes without complex overlapping geometry
+    return gridX + gridY + z;
+  }
+
+  /**
+   * Sort quads by depth using Painter's Algorithm
+   * Quads are sorted from back-to-front so closer objects are drawn last (on top)
+   */
+  sortQuadsByDepth(): void {
+    if (this.quads.length <= 1) {
+      return;
+    }
+
+    this.quads.sort((a, b) => {
+      const sortKeyA = this.calculateSortKey(a);
+      const sortKeyB = this.calculateSortKey(b);
+      return sortKeyA - sortKeyB;
+    });
+  }
+
+  /**
    * Update the batch - rebuilds vertex buffer if quads changed
    */
   update(): void {
@@ -925,6 +994,9 @@ export class GPUBasedSpriteBatchRenderer {
     if (this.quads.length === 0) {
       return;
     }
+
+    // Sort quads by depth before rendering (Painter's Algorithm)
+    this.sortQuadsByDepth();
 
     // Update vertex buffer if needed
     this.update();
