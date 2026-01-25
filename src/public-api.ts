@@ -162,6 +162,27 @@ export {
   SoaWebGLRendererFallback,
 } from "./rendering/soa-webgl-renderer";
 
+// Collision detection system
+export {
+  SpatialHashCollision,
+  WorkerCollision,
+  GPUComputeCollision,
+  HybridCollision,
+  createCollisionSystem,
+  getRecommendedSystemType,
+  CollisionPresets,
+  createCollisionFromPreset,
+  isWorkerAvailable,
+} from "./simulation/collision";
+export type {
+  BoundingBox,
+  Circle,
+  CollisionPair,
+  CollisionConfig,
+  CollisionResult,
+  EntityHandle as CollisionEntityHandle,
+} from "./simulation/collision";
+
 // Networking system (state synchronization, prediction, reconciliation)
 export {
   BinarySerializer,
