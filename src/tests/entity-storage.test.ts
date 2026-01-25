@@ -303,6 +303,44 @@ describe("EntityStorage", () => {
       expect(handles).toContainEqual(handle1);
       expect(handles).toContainEqual(handle2);
     });
+
+    it("should find entities at high indices after deallocation (regression test for count bug)", () => {
+      // Create entities and assign IDs
+      const entity1 = storage.allocate(0);
+      storage.setId(entity1.index, "entity_1");
+
+      const entity29 = storage.allocate(0);
+      storage.setId(entity29.index, "entity_29");
+
+      const entity31 = storage.allocate(0);
+      storage.setId(entity31.index, "entity_31");
+
+      // Verify initial count
+      expect(storage.getCount()).toBe(3);
+
+      // Deallocate early entities to decrease count
+      storage.deallocate(entity1);
+
+      // count should now be 2, but entity_29 and entity_31 should still be findable
+      expect(storage.getCount()).toBe(2);
+
+      // This is the bug: findIndex was using idx < this.count,
+      // which would skip indices >= count even if they contain active entities
+      const found29 = storage.find("entity_29");
+      expect(found29).toBeDefined();
+      expect(found29?.index).toBe(entity29.index);
+
+      const found31 = storage.find("entity_31");
+      expect(found31).toBeDefined();
+      expect(found31?.index).toBe(entity31.index);
+
+      // Verify findIndex directly as well
+      const index29 = storage.findIndex("entity_29");
+      expect(index29).toBe(entity29.index);
+
+      const index31 = storage.findIndex("entity_31");
+      expect(index31).toBe(entity31.index);
+    });
   });
 
   describe("Direct Array Access", () => {
@@ -412,6 +450,330 @@ describe("EntityStorage", () => {
       expect(view[0]).toBe(10);
       expect(view[1]).toBe(20);
       expect(view[2]).toBe(5);
+    });
+  });
+
+  describe("Mass Entity Operations (Rendering)", () => {
+    it("should handle creating and removing 1000 entities efficiently", () => {
+      const ENEMY_COUNT = 1000;
+      const handles: EntityHandle[] = [];
+
+      // Create 1000 enemies
+      for (let i = 0; i < ENEMY_COUNT; i++) {
+        const handle = storage.allocate(0); // type 0 = enemy
+        storage.setPosition(handle.index, i * 10, i * 10, 0);
+        storage.setId(handle.index, `enemy_${i}`);
+        handles.push(handle);
+      }
+
+      expect(storage.getCount()).toBe(ENEMY_COUNT);
+
+      // Verify all are in getAllHandles (used for rendering)
+      const allHandles = storage.getAllHandles();
+      expect(allHandles.length).toBe(ENEMY_COUNT);
+
+      // Remove half of them
+      const toRemove = ENEMY_COUNT / 2;
+      for (let i = 0; i < toRemove; i++) {
+        storage.deallocate(handles[i]);
+      }
+
+      // Verify count is correct
+      expect(storage.getCount()).toBe(ENEMY_COUNT - toRemove);
+
+      // Verify getAllHandles only returns active entities
+      const activeHandles = storage.getAllHandles();
+      expect(activeHandles.length).toBe(ENEMY_COUNT - toRemove);
+
+      // Verify deallocated handles are not in the list
+      const activeHandleIndices = new Set(activeHandles.map(h => h.index));
+      for (let i = 0; i < toRemove; i++) {
+        expect(activeHandleIndices.has(handles[i].index)).toBe(false);
+      }
+    });
+
+    it("should reuse deallocated slots for new entities", () => {
+      const handles: EntityHandle[] = [];
+
+      // Create 100 entities
+      for (let i = 0; i < 100; i++) {
+        const handle = storage.allocate(0);
+        storage.setPosition(handle.index, i, i, 0);
+        handles.push(handle);
+      }
+
+      expect(storage.getCount()).toBe(100);
+
+      // Remove all of them
+      for (const handle of handles) {
+        storage.deallocate(handle);
+      }
+
+      expect(storage.getCount()).toBe(0);
+
+      // Create 100 new entities - should reuse slots
+      const newHandles: EntityHandle[] = [];
+      for (let i = 0; i < 100; i++) {
+        const handle = storage.allocate(0);
+        storage.setPosition(handle.index, i + 100, i + 100, 0);
+        newHandles.push(handle);
+      }
+
+      // Verify slots were reused (indices should match)
+      const originalIndices = handles.map(h => h.index);
+      const newIndices = newHandles.map(h => h.index);
+
+      // Same indices should be reused (though potentially in different order)
+      const newSet = new Set(newIndices);
+
+      // All original indices should be in the new set
+      originalIndices.forEach(idx => {
+        expect(newSet.has(idx)).toBe(true);
+      });
+
+      expect(storage.getCount()).toBe(100);
+    });
+
+    it("should correctly filter active entities for rendering", () => {
+      // Create entities with different positions
+      const handles: EntityHandle[] = [];
+      for (let i = 0; i < 50; i++) {
+        const handle = storage.allocate(0);
+        storage.setPosition(handle.index, i * 10, i * 5, 0);
+        storage.setColor(handle.index, i % 2, 0.5, 0.5, 1.0);
+        handles.push(handle);
+      }
+
+      // Remove every other entity
+      for (let i = 0; i < handles.length; i += 2) {
+        storage.deallocate(handles[i]);
+      }
+
+      // Get active entities (simulates rendering loop)
+      const activeHandles = storage.getAllHandles();
+      expect(activeHandles.length).toBe(25);
+
+      // Verify all active handles point to valid entities
+      for (const handle of activeHandles) {
+        expect(storage.isValidHandle(handle)).toBe(true);
+        const pos = storage.getPosition(handle.index);
+        // Verify position data is intact
+        expect(pos.x).toBeGreaterThan(-1);
+        expect(pos.y).toBeGreaterThan(-1);
+      }
+
+      // Verify positions array can be safely accessed for rendering
+      const positions = storage.getPositions();
+      const colors = storage.getColors();
+
+      // All active entities should have valid data in the arrays
+      for (const handle of activeHandles) {
+        const idx = handle.index;
+        expect(positions[idx * 3]).toBeDefined();
+        expect(positions[idx * 3 + 1]).toBeDefined();
+        expect(positions[idx * 3 + 2]).toBeDefined();
+        expect(colors[idx * 4]).toBeDefined();
+        expect(colors[idx * 4 + 1]).toBeDefined();
+        expect(colors[idx * 4 + 2]).toBeDefined();
+        expect(colors[idx * 4 + 3]).toBeDefined();
+      }
+    });
+
+    it("should handle rapid add/remove cycles without memory leaks", () => {
+      const initialCapacity = storage.getCapacity();
+
+      // Perform multiple add/remove cycles
+      for (let cycle = 0; cycle < 10; cycle++) {
+        const handles: EntityHandle[] = [];
+
+        // Add 100 entities
+        for (let i = 0; i < 100; i++) {
+          handles.push(storage.allocate(0));
+        }
+
+        expect(storage.getCount()).toBe(100);
+
+        // Remove all
+        for (const handle of handles) {
+          storage.deallocate(handle);
+        }
+
+        expect(storage.getCount()).toBe(0);
+      }
+
+      // Capacity should not have grown excessively
+      // (may have grown from initial, but not by 10x)
+      const finalCapacity = storage.getCapacity();
+      expect(finalCapacity).toBeLessThanOrEqual(initialCapacity * 2);
+
+      // Should still be able to add entities
+      const handle = storage.allocate(0);
+      expect(storage.getCount()).toBe(1);
+      storage.deallocate(handle);
+    });
+
+    it("should maintain data integrity when entities are removed mid-array", () => {
+      // Create entities
+      const handles: EntityHandle[] = [];
+      for (let i = 0; i < 10; i++) {
+        const handle = storage.allocate(0);
+        storage.setPosition(handle.index, i * 100, i * 100, 0);
+        storage.setColor(handle.index, i / 10, 0, 0, 1);
+        handles.push(handle);
+      }
+
+      // Remove middle entities (indices 3, 4, 5, 6)
+      storage.deallocate(handles[3]);
+      storage.deallocate(handles[4]);
+      storage.deallocate(handles[5]);
+      storage.deallocate(handles[6]);
+
+      // Verify remaining entities have correct data
+      const remaining = storage.getAllHandles();
+      expect(remaining.length).toBe(6);
+
+      // Check entity at index 0 (first)
+      const pos0 = storage.getPosition(handles[0].index);
+      expect(pos0.x).toBe(0);
+
+      // Check entity at index 9 (last)
+      const pos9 = storage.getPosition(handles[9].index);
+      expect(pos9.x).toBe(900);
+
+      // Verify removed entities are not in the active list
+      const activeIndices = remaining.map(h => h.index);
+      expect(activeIndices.includes(handles[3].index)).toBe(false);
+      expect(activeIndices.includes(handles[4].index)).toBe(false);
+      expect(activeIndices.includes(handles[5].index)).toBe(false);
+      expect(activeIndices.includes(handles[6].index)).toBe(false);
+    });
+
+    it("should correctly handle findHandlesByType after mass removal", () => {
+      // Create mixed entity types
+      const playerHandles: EntityHandle[] = [];
+      const enemyHandles: EntityHandle[] = [];
+
+      // Create 50 players and 50 enemies
+      for (let i = 0; i < 50; i++) {
+        playerHandles.push(storage.allocate(0)); // type 0
+        enemyHandles.push(storage.allocate(1));  // type 1
+      }
+
+      expect(storage.getCount()).toBe(100);
+      expect(storage.findHandlesByType(0).length).toBe(50);
+      expect(storage.findHandlesByType(1).length).toBe(50);
+
+      // Remove all players
+      for (const handle of playerHandles) {
+        storage.deallocate(handle);
+      }
+
+      // Verify only enemies remain
+      expect(storage.getCount()).toBe(50);
+      expect(storage.findHandlesByType(0).length).toBe(0);
+      expect(storage.findHandlesByType(1).length).toBe(50);
+
+      // Remove half the enemies
+      for (let i = 0; i < 25; i++) {
+        storage.deallocate(enemyHandles[i]);
+      }
+
+      expect(storage.getCount()).toBe(25);
+      expect(storage.findHandlesByType(1).length).toBe(25);
+    });
+
+    it("should not include removed entities in rendering data", () => {
+      // Create entities with distinct rendering properties
+      const handles: EntityHandle[] = [];
+      for (let i = 0; i < 20; i++) {
+        const handle = storage.allocate(0);
+        storage.setPosition(handle.index, i * 100, i * 100, 0);
+        storage.setColor(handle.index, i / 20, 0, 0, 1); // unique red value per entity
+        storage.setTextureId(handle.index, i); // unique texture ID per entity
+        handles.push(handle);
+      }
+
+      // Get all active handles before removal (simulates render loop)
+      let activeHandles = storage.getAllHandles();
+      expect(activeHandles.length).toBe(20);
+
+      // Verify all entities are in render data
+      const positions = storage.getPositions();
+      const colors = storage.getColors();
+      const texIds = storage.getTextureIds();
+
+      for (const handle of activeHandles) {
+        const idx = handle.index;
+        // Verify data exists (not undefined/null)
+        expect(positions[idx * 3]).toBeDefined();
+        expect(texIds[idx]).toBeDefined();
+        expect(texIds[idx]).toBeGreaterThanOrEqual(0);
+      }
+
+      // Remove half of them (even indices)
+      const removedIndices: number[] = [];
+      for (let i = 0; i < handles.length; i += 2) {
+        storage.deallocate(handles[i]);
+        removedIndices.push(handles[i].index);
+      }
+
+      // Get active handles after removal
+      activeHandles = storage.getAllHandles();
+      expect(activeHandles.length).toBe(10);
+
+      // Verify removed entities are NOT in the active handle list
+      const activeIndices = new Set(activeHandles.map(h => h.index));
+      for (const removedIdx of removedIndices) {
+        expect(activeIndices.has(removedIdx)).toBe(false);
+      }
+
+      // Verify rendering arrays only contain active entities
+      // When iterating through active handles, all should have valid data
+      for (const handle of activeHandles) {
+        const idx = handle.index;
+
+        // Verify data exists and is valid
+        const x = positions[idx * 3];
+        const y = positions[idx * 3 + 1];
+        const z = positions[idx * 3 + 2];
+        const r = colors[idx * 4];
+        const texId = texIds[idx];
+
+        expect(x).toBeDefined();
+        expect(y).toBeDefined();
+        expect(z).toBeDefined();
+        expect(r).toBeGreaterThanOrEqual(0);
+        expect(texId).toBeGreaterThanOrEqual(0);
+      }
+
+      // Verify we can iterate safely through all active entities
+      // This simulates what the renderer does
+      const renderedPositions: number[] = [];
+      const renderedColors: number[] = [];
+      const renderedTexIds: number[] = [];
+
+      for (const handle of activeHandles) {
+        const idx = handle.index;
+        const pos = storage.getPosition(idx);
+        const color = storage.getColor(idx);
+        const texId = storage.getTextureId(idx);
+
+        renderedPositions.push(pos.x, pos.y, pos.z);
+        renderedColors.push(color.r, color.g, color.b, color.a);
+        renderedTexIds.push(texId);
+      }
+
+      // Should only have 10 entities worth of data
+      expect(renderedPositions.length).toBe(10 * 3); // 10 entities * 3 coords
+      expect(renderedColors.length).toBe(10 * 4);    // 10 entities * 4 color channels
+      expect(renderedTexIds.length).toBe(10);        // 10 entities * 1 tex ID
+
+      // Verify no removed entity data is in the rendered arrays
+      const renderedTexIdsSet = new Set(renderedTexIds);
+      for (let i = 0; i < handles.length; i += 2) {
+        // Removed entities had texture IDs equal to their index
+        expect(renderedTexIdsSet.has(i)).toBe(false);
+      }
     });
   });
 });

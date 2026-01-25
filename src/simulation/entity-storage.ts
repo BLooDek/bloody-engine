@@ -43,22 +43,31 @@ type TypedArrayConstructor = {
  */
 interface CustomProperty {
   array: TypedArray;
-  type: 'Int8Array' | 'Uint8Array' | 'Uint8ClampedArray' | 'Int16Array' | 'Uint16Array' | 'Int32Array' | 'Uint32Array' | 'Float32Array' | 'Float64Array';
+  type:
+    | "Int8Array"
+    | "Uint8Array"
+    | "Uint8ClampedArray"
+    | "Int16Array"
+    | "Uint16Array"
+    | "Int32Array"
+    | "Uint32Array"
+    | "Float32Array"
+    | "Float64Array";
 }
 
 export class EntityStorage {
   // Entity metadata
   private ids: string[] = [];
-  private types: Uint16Array;          // Type IDs
-  private active: Uint8Array;           // 1 = active, 0 = deleted
-  private generation: Uint32Array;      // For handle validation
+  private types: Uint16Array; // Type IDs
+  private active: Uint8Array; // 1 = active, 0 = deleted
+  private generation: Uint32Array; // For handle validation
 
   // Current state arrays (interpolation)
-  private positions: Float32Array;      // [x0, y0, z0, x1, y1, z1, ...]
-  private velocities: Float32Array;     // [vx0, vy0, vz0, ...]
-  private rotations: Float32Array;      // [rot0, rot1, ...]
-  private speeds: Float32Array;         // [speed0, speed1, ...]
-  private isMoving: Uint8Array;         // [moving0, moving1, ...]
+  private positions: Float32Array; // [x0, y0, z0, x1, y1, z1, ...]
+  private velocities: Float32Array; // [vx0, vy0, vz0, ...]
+  private rotations: Float32Array; // [rot0, rot1, ...]
+  private speeds: Float32Array; // [speed0, speed1, ...]
+  private isMoving: Uint8Array; // [moving0, moving1, ...]
 
   // Previous state arrays (for interpolation)
   private prevPositions: Float32Array;
@@ -68,8 +77,8 @@ export class EntityStorage {
   private prevIsMoving: Uint8Array;
 
   // Renderer properties
-  private textureIds: Uint32Array;      // Texture atlas indices
-  private colors: Float32Array;         // [r0, g0, b0, a0, r1, g1, b1, a1, ...]
+  private textureIds: Uint32Array; // Texture atlas indices
+  private colors: Float32Array; // [r0, g0, b0, a0, r1, g1, b1, a1, ...]
 
   // Custom properties (extensible, opt-in)
   private customProperties: Map<string, CustomProperty> = new Map();
@@ -139,7 +148,9 @@ export class EntityStorage {
     // Validate generation first (before checking active status)
     // This catches stale handles even if the slot was reused
     if (this.generation[handle.index] !== handle.generation) {
-      throw new Error(`Stale handle: entity at index ${handle.index} has been deallocated`);
+      throw new Error(
+        `Stale handle: entity at index ${handle.index} has been deallocated`,
+      );
     }
 
     if (!this.active[handle.index]) {
@@ -171,9 +182,11 @@ export class EntityStorage {
    * Find entity index by ID
    */
   findIndex(id: string): number | undefined {
-    return this.ids.findIndex((entityId, idx) =>
-      idx < this.count && this.active[idx] && entityId === id
+    const index = this.ids.findIndex(
+      (entityId, idx) =>
+        idx < this.capacity && this.active[idx] && entityId === id,
     );
+    return index === -1 ? undefined : index;
   }
 
   /**
@@ -270,7 +283,7 @@ export class EntityStorage {
     this.velocities[i + 2] = z;
 
     // Update isMoving flag
-    this.isMoving[index] = (x !== 0 || y !== 0 || z !== 0) ? 1 : 0;
+    this.isMoving[index] = x !== 0 || y !== 0 || z !== 0 ? 1 : 0;
   }
 
   /**
@@ -351,7 +364,7 @@ export class EntityStorage {
     r: number,
     g: number,
     b: number,
-    a: number = 1
+    a: number = 1,
   ): void {
     this.validateIndex(index);
     const i = index * 4;
@@ -404,7 +417,9 @@ export class EntityStorage {
       this.velocities[i + 2] = state.velocity.z ?? 0;
 
       this.isMoving[index] =
-        (state.velocity.x !== 0 || state.velocity.y !== 0 || state.velocity.z !== 0)
+        state.velocity.x !== 0 ||
+        state.velocity.y !== 0 ||
+        state.velocity.z !== 0
           ? 1
           : 0;
     }
@@ -504,10 +519,7 @@ export class EntityStorage {
   /**
    * Register a custom property (opt-in extension)
    */
-  registerCustomProperty(
-    name: string,
-    type: TypedArrayConstructor
-  ): void {
+  registerCustomProperty(name: string, type: TypedArrayConstructor): void {
     if (this.customProperties.has(name)) {
       throw new Error(`Custom property "${name}" already registered`);
     }
@@ -516,18 +528,18 @@ export class EntityStorage {
     const typeStr = array.constructor.name;
 
     if (
-      typeStr !== 'Float32Array' &&
-      typeStr !== 'Uint32Array' &&
-      typeStr !== 'Uint8Array' &&
-      typeStr !== 'Int32Array' &&
-      typeStr !== 'Float64Array'
+      typeStr !== "Float32Array" &&
+      typeStr !== "Uint32Array" &&
+      typeStr !== "Uint8Array" &&
+      typeStr !== "Int32Array" &&
+      typeStr !== "Float64Array"
     ) {
       throw new Error(`Unsupported typed array type: ${typeStr}`);
     }
 
     this.customProperties.set(name, {
       array,
-      type: typeStr as CustomProperty['type'],
+      type: typeStr as CustomProperty["type"],
     });
   }
 
