@@ -148,6 +148,20 @@ export type {
   SimulationConfig,
 } from "./simulation";
 
+// SoA (Structure of Arrays) Entity Storage System
+export { EntityStorage } from "./simulation/entity-storage";
+export { EntityTypeRegistry } from "./simulation/entity-type-registry";
+export type { EntityHandle } from "./simulation/entity-handle";
+export {
+  createEntityHandle,
+  isHandleValid,
+  handlesEqual,
+} from "./simulation/entity-handle";
+export {
+  SoaWebGLRenderer,
+  SoaWebGLRendererFallback,
+} from "./rendering/soa-webgl-renderer";
+
 // Networking system (state synchronization, prediction, reconciliation)
 export {
   BinarySerializer,

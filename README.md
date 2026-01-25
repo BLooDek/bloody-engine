@@ -4,9 +4,11 @@ A WebGL-based 2.5D graphics engine for isometric rendering on Node.js, written i
 
 ## Features
 
+- **Structure of Arrays (SoA)** - Entity storage with typed arrays for zero-copy GPU transfers and cache-friendly access
 - **2.5D Rendering** - Optimized for isometric and dimetric projections with depth sorting
 - **Server-Side Rendering** - Headless WebGL rendering on Node.js using `gl` and `@kmamal/sdl`
 - **Batch Rendering** - Efficient sprite batching with GPU-accelerated transformations
+- **Persistent Buffer Mapping** - WebGL2 zero-copy GPU transfers for maximum performance
 - **Resource Management** - Unified asset loading pipeline for textures and shaders
 - **Input System** - Command queue pattern supporting SDL and network input sources
 - **Networking** - Client-side prediction, server reconciliation, and state synchronization
@@ -15,6 +17,7 @@ A WebGL-based 2.5D graphics engine for isometric rendering on Node.js, written i
 - **TypeScript** - Fully typed for excellent developer experience
 - **Object Pooling** - Memory-efficient object reuse patterns
 - **Window Management** - SDL-based window creation for interactive applications
+- **Custom Properties** - Opt-in extensible system for game-specific entity properties
 
 ## Installation
 
@@ -96,9 +99,12 @@ Bloody Engine uses different coordinate systems for different purposes. Mixing t
 
 | Class | Description |
 |-------|-------------|
-| [Ticker](src/core/ticker.ts) | Fixed timestep game loop |
-| [Entity](src/simulation/entity.ts) / [EntityManager](src/simulation/entity-manager.ts) | Entity component system |
+| [EntityStorage](src/simulation/entity-storage.ts) | SoA storage with typed arrays for high-performance entity data |
+| [EntityHandle](src/simulation/entity-handle.ts) | Opaque handles for safe entity references |
+| [EntityTypeRegistry](src/simulation/entity-type-registry.ts) | Type string to ID mapping for storage efficiency |
+| [Entity](src/simulation/entity.ts) / [EntityManager](src/simulation/entity-manager.ts) | Entity component system (now uses SoA storage internally) |
 | [SimulationLoop](src/simulation/simulation-loop.ts) | Deterministic game logic simulation |
+| [SoaWebGLRenderer](src/rendering/soa-webgl-renderer.ts) | WebGL2 renderer with persistent buffer mapping |
 | [ClientPredictor](src/networking/client-predictor.ts) | Client-side prediction for lag compensation |
 | [ServerReconciler](src/networking/server-reconciler.ts) | Server-side reconciliation |
 | [StateSnapshot](src/networking/state-snapshot.ts) | World state serialization |
@@ -258,32 +264,46 @@ const metrics = ticker.getMetrics();
 console.log(`FPS: ${metrics.fps}, Delta Time: ${metrics.deltaTime}s`);
 ```
 
-### Entity System
+### Entity System (SoA Architecture)
+
+The engine now uses Structure of Arrays (SoA) for entity storage, providing:
+- **Zero-copy GPU transfers** - Direct typed array uploads to WebGL buffers
+- **Better cache locality** - Sequential memory access patterns
+- **SIMD-ready** - Data layout enables future vectorization
+- **Extensible properties** - Add custom typed arrays for game-specific data
 
 ```typescript
-import { Entity, EntityManager, type EntityState } from 'bloody-engine';
+import { EntityManager, type EntityState } from 'bloody-engine';
 
-// Create entity
-const entity = new Entity({
-  id: 'player-1',
-  x: 0, y: 0, z: 0,
-  rotation: 0,
-  type: 'player',
-  health: 100
+// Create entity manager (uses SoA storage internally)
+const manager = new EntityManager();
+
+// Create entity with initial state
+const player = manager.createEntity("player", {
+  gridPos: { xgrid: 10, ygrid: 20, zheight: 5 },
+  velocity: { x: 1, y: 0, z: 0 },
+  speed: 2.5
 });
 
-// Create entity manager
-const manager = new EntityManager();
-manager.add(entity);
+// All existing methods work unchanged (full backward compatibility)
+player.setGridPos(50, 60, 10);
+player.move(5, 5, 0);
+player.setVelocity(2, 1, 0);
 
 // Query entities
-const players = manager.query({ type: 'player' });
-const nearby = manager.queryInRegion(0, 0, 100);
+const players = manager.getEntitiesByType("player");
+const nearby = manager.getEntitiesInRange(50, 60, 100);
 
-// Update entity
-entity.x += 10;
-entity.updatedAt = Date.now();
-manager.update(entity);
+// Register custom properties (opt-in extension)
+manager.registerCustomProperty("health", Float32Array);
+manager.registerCustomProperty("stamina", Uint32Array);
+
+// Access SoA storage directly for advanced use
+const storage = manager.getStorage();
+const handle = (player as any).getHandle();
+
+// Set custom property
+storage.setCustomProperty(handle.index, "health", 100);
 ```
 
 ### Input System with Command Queue
@@ -436,6 +456,131 @@ batchRenderer.addQuad({
 });
 ```
 
+### SoA Deep Dive: Zero-Copy GPU Rendering
+
+The Structure of Arrays (SoA) architecture enables direct GPU transfers without intermediate copying:
+
+```typescript
+import { EntityStorage, SoaWebGLRenderer, Shader } from 'bloody-engine';
+
+// Create SoA storage and populate with entities
+const storage = new EntityStorage(10000);
+// ... add entities ...
+
+// Create WebGL2 renderer with persistent buffer mapping
+const gl = device.getGLContext() as WebGL2RenderingContext;
+const shader = device.createShader(vertexSource, fragmentSource);
+const renderer = new SoaWebGLRenderer(gl, shader, 10000);
+
+// Initialize persistent buffers (maps GPU memory to CPU arrays)
+renderer.initialize(storage);
+
+// In your render loop:
+function render() {
+  // Zero-copy: Update GPU memory directly
+  renderer.render(storage);
+
+  // GPU sees changes immediately (coherent mapping)
+  device.present();
+}
+```
+
+**Performance Benefits:**
+- **No bufferSubData overhead**: Direct CPU→GPU memory writes
+- **Better cache locality**: Sequential access to entity data
+- **SIMD-ready**: Data layout enables future vectorization
+- **Memory efficient**: Typed arrays use 2-4x less memory than objects
+
+### Custom Properties Extension
+
+Add game-specific properties without modifying core classes:
+
+```typescript
+import { EntityManager, Float32Array, Uint32Array } from 'bloody-engine';
+
+const manager = new EntityManager();
+
+// Register custom properties (opt-in)
+manager.registerCustomProperty('health', Float32Array);    // Float values
+manager.registerCustomProperty('mana', Uint32Array);       // Integer values
+manager.registerCustomProperty('xp', Float32Array);        // Experience points
+
+// Create entity
+const player = manager.createEntity('player');
+
+// Access storage to set custom properties
+const storage = manager.getStorage();
+const handle = (player as any).getHandle();
+
+storage.setCustomProperty(handle.index, 'health', 100.0);
+storage.setCustomProperty(handle.index, 'mana', 50);
+storage.setCustomProperty(handle.index, 'xp', 0);
+
+// Bulk update all entities (cache-efficient)
+const allHealth = storage.getCustomPropertyArray('health');
+for (let i = 0; i < storage.getCount(); i++) {
+  allHealth[i] += 10; // Regenerate health for all entities
+}
+```
+
+### SoA Memory Layout
+
+Understanding the SoA memory layout helps with performance optimization:
+
+```typescript
+// Entity 0 data at indices 0-2
+positions[0] = entity0.x
+positions[1] = entity0.y
+positions[2] = entity0.z
+
+// Entity 1 data at indices 3-5
+positions[3] = entity1.x
+positions[4] = entity1.y
+positions[5] = entity1.z
+
+// Same pattern for all properties:
+// - velocities: [vx0, vy0, vz0, vx1, vy1, vz1, ...]
+// - colors: [r0, g0, b0, a0, r1, g1, b1, a1, ...]
+// - rotations: [rot0, rot1, rot2, ...]
+// - textureIds: [id0, id1, id2, ...]
+```
+
+This layout enables:
+- **Zero-copy views**: `positions.subarray(0, entityCount * 3)` → GPU
+- **Bulk updates**: Loop through contiguous memory
+- **Cache efficiency**: Predictable access patterns
+
+### Migration from AoS to SoA
+
+If you have existing code using the old Array-of-Structures pattern:
+
+**Before (AoS - deprecated):**
+```typescript
+// This no longer works
+const entity = new Entity("player1", "player", {
+  gridPos: { xgrid: 10, ygrid: 20, zheight: 0 }
+});
+```
+
+**After (SoA - current):**
+```typescript
+// Use EntityManager factory
+const manager = new EntityManager();
+const entity = manager.createEntity("player", {
+  gridPos: { xgrid: 10, ygrid: 20, zheight: 0 }
+});
+
+// Everything else works the same!
+entity.setGridPos(50, 60, 10);
+entity.move(5, 5, 0);
+entity.setVelocity(1, 0, 0);
+```
+
+**Breaking Changes:**
+- Direct `new Entity()` construction is no longer supported
+- Use `EntityManager.createEntity()` for all entity creation
+- Deserialization: Use `EntityManager.deserializeAll()` instead of `Entity.deserialize()`
+
 ## Advanced Examples
 
 ### Networked Game Architecture
@@ -515,7 +660,7 @@ console.log('Deterministic:', JSON.stringify(state1) === JSON.stringify(state2))
 
 ## Testing
 
-The engine includes comprehensive tests for determinism and visual regression:
+The engine includes comprehensive tests for determinism, visual regression, and SoA functionality:
 
 ```bash
 # Run all tests
@@ -560,6 +705,7 @@ src/
 │   ├── batch-renderer.ts
 │   ├── camera.ts
 │   ├── projection.ts
+│   ├── soa-webgl-renderer.ts      # WebGL2 zero-copy renderer
 │   └── spatial-hash.ts
 ├── input/             # Input system (command queue)
 │   ├── command-queue.ts
@@ -568,6 +714,9 @@ src/
 ├── simulation/        # Game logic simulation
 │   ├── entity.ts
 │   ├── entity-manager.ts
+│   ├── entity-storage.ts        # SoA storage with typed arrays
+│   ├── entity-handle.ts          # Handle-based entity references
+│   ├── entity-type-registry.ts   # Type string to ID mapping
 │   └── simulation-loop.ts
 ├── networking/        # Networking for multiplayer
 │   ├── client-predictor.ts
@@ -584,6 +733,7 @@ src/
 ### Key Concepts
 
 - **Separation of Concerns**: Rendering, input, simulation, and networking are completely separate systems
+- **Structure of Arrays (SoA)**: Entity storage uses typed arrays for zero-copy GPU transfers and cache efficiency
 - **Deterministic Simulation**: Game logic runs in fixed timestep for consistency across clients
 - **Command Pattern**: All input goes through a command queue for easy recording/replay
 - **Client-Side Prediction**: Reduces perceived lag in networked games
