@@ -15,19 +15,19 @@
 import {
   BinarySerializer,
   BinaryReader,
-  EntitySerializer,
   StateSnapshot,
   SnapshotManager,
   PredictedInputBuffer,
 } from "../networking";
-import { Entity, EntityManager, SimulationLoop } from "../simulation";
+import { EntityManager, SimulationLoop } from "../simulation";
 import { CommandQueue, CommandType } from "../input";
 
 describe("State Synchronization Integration", () => {
   describe("Binary Serialization", () => {
     it("should serialize and deserialize a single entity", async () => {
-      // Create entity
-      const entity = new Entity("test_entity", "player", {
+      // Create entity using EntityManager
+      const manager = new EntityManager();
+      const entity = manager.createEntity("player", {
         gridPos: { xgrid: 10, ygrid: 20, zheight: 5 },
         velocity: { x: 1, y: 0, z: 0 },
         rotation: Math.PI / 4,
@@ -38,49 +38,53 @@ describe("State Synchronization Integration", () => {
       // Serialize
       const serialized = await entity.serializeBinary();
 
-      // Deserialize
-      const deserialized = await Entity.deserializeBinary(serialized);
+      // Deserialize through EntityManager
+      const deserializedManager = await EntityManager.deserializeEntityBinary(serialized);
+      const deserialized = deserializedManager.getEntity(entity.id);
 
       // Verify
-      expect(deserialized.id).toBe(entity.id);
-      expect(deserialized.type).toBe(entity.type);
-      expect(deserialized.state.gridPos.xgrid).toBeCloseTo(entity.state.gridPos.xgrid);
-      expect(deserialized.state.gridPos.ygrid).toBeCloseTo(entity.state.gridPos.ygrid);
-      expect(deserialized.state.gridPos.zheight).toBeCloseTo(
+      expect(deserialized).toBeDefined();
+      expect(deserialized!.id).toBe(entity.id);
+      expect(deserialized!.type).toBe(entity.type);
+      expect(deserialized!.state.gridPos.xgrid).toBeCloseTo(entity.state.gridPos.xgrid);
+      expect(deserialized!.state.gridPos.ygrid).toBeCloseTo(entity.state.gridPos.ygrid);
+      expect(deserialized!.state.gridPos.zheight).toBeCloseTo(
         entity.state.gridPos.zheight,
       );
-      expect(deserialized.state.velocity.x).toBeCloseTo(entity.state.velocity.x);
-      expect(deserialized.state.velocity.y).toBeCloseTo(entity.state.velocity.y);
-      expect(deserialized.state.velocity.z).toBeCloseTo(entity.state.velocity.z);
-      expect(deserialized.state.rotation).toBeCloseTo(entity.state.rotation);
-      expect(deserialized.state.speed).toBeCloseTo(entity.state.speed);
-      expect(deserialized.state.isMoving).toBe(entity.state.isMoving);
+      expect(deserialized!.state.velocity.x).toBeCloseTo(entity.state.velocity.x);
+      expect(deserialized!.state.velocity.y).toBeCloseTo(entity.state.velocity.y);
+      expect(deserialized!.state.velocity.z).toBeCloseTo(entity.state.velocity.z);
+      expect(deserialized!.state.rotation).toBeCloseTo(entity.state.rotation);
+      expect(deserialized!.state.speed).toBeCloseTo(entity.state.speed);
+      expect(deserialized!.state.isMoving).toBe(entity.state.isMoving);
     });
 
     it("should serialize multiple entities", async () => {
-      const entities: Entity[] = [
-        new Entity("entity1", "player", {
-          gridPos: { xgrid: 0, ygrid: 0, zheight: 0 },
-        }),
-        new Entity("entity2", "enemy", {
-          gridPos: { xgrid: 100, ygrid: 200, zheight: 10 },
-          velocity: { x: -1, y: 1, z: 0 },
-        }),
-      ];
+      const manager = new EntityManager();
+      const entity1 = manager.createEntity("player", {
+        gridPos: { xgrid: 0, ygrid: 0, zheight: 0 },
+      });
+      const entity2 = manager.createEntity("enemy", {
+        gridPos: { xgrid: 100, ygrid: 200, zheight: 10 },
+        velocity: { x: -1, y: 1, z: 0 },
+      });
 
-      const serialized = EntitySerializer.serializeEntities(entities);
-      const deserialized = await EntitySerializer.deserializeEntities(serialized);
+      const entities = [entity1, entity2];
+      const serialized = await manager.serializeAllBinary();
+      const deserializedManager = await EntityManager.deserializeAllBinary(serialized);
 
-      expect(deserialized.length).toBe(entities.length);
+      expect(deserializedManager.count).toBe(entities.length);
 
-      for (let i = 0; i < entities.length; i++) {
-        expect(deserialized[i].id).toBe(entities[i].id);
-        expect(deserialized[i].type).toBe(entities[i].type);
+      for (const entity of entities) {
+        const deserialized = deserializedManager.getEntity(entity.id);
+        expect(deserialized).toBeDefined();
+        expect(deserialized!.type).toBe(entity.type);
       }
     });
 
     it("should produce smaller binary output than JSON", async () => {
-      const entity = new Entity("test_entity", "player", {
+      const manager = new EntityManager();
+      const entity = manager.createEntity("player", {
         gridPos: { xgrid: 10, ygrid: 20, zheight: 5 },
         velocity: { x: 1, y: 0, z: 0 },
         rotation: Math.PI / 4,
@@ -124,31 +128,32 @@ describe("State Synchronization Integration", () => {
   });
 
   describe("State Snapshots", () => {
-    let entities: Entity[];
+    let manager: EntityManager;
 
     beforeEach(() => {
-      entities = [
-        new Entity("player1", "player", {
-          gridPos: { xgrid: 10, ygrid: 10, zheight: 0 },
-        }),
-        new Entity("enemy1", "enemy", {
-          gridPos: { xgrid: 50, ygrid: 50, zheight: 0 },
-        }),
-      ];
+      manager = new EntityManager();
+      manager.createEntity("player", {
+        gridPos: { xgrid: 10, ygrid: 10, zheight: 0 },
+      });
+      manager.createEntity("enemy", {
+        gridPos: { xgrid: 50, ygrid: 50, zheight: 0 },
+      });
     });
 
     it("should create and retrieve snapshots", () => {
+      const entities = manager.getAllEntities();
       const snapshot = StateSnapshot.fromEntities(100, entities);
 
       expect(snapshot.tick).toBe(100);
       expect(snapshot.size).toBe(2);
 
-      const playerState = snapshot.getEntityState("player1");
+      const playerState = snapshot.getEntityState(entities[0].id);
       expect(playerState).toBeDefined();
       expect(playerState!.gridPos.xgrid).toBe(10);
     });
 
     it("should clone snapshots immutably", () => {
+      const entities = manager.getAllEntities();
       const snapshot = StateSnapshot.fromEntities(100, entities);
       const cloned = snapshot.clone();
 
@@ -158,98 +163,104 @@ describe("State Synchronization Integration", () => {
     });
 
     it("should filter snapshots by entity IDs", () => {
+      const entities = manager.getAllEntities();
       const snapshot = StateSnapshot.fromEntities(100, entities);
-      const filtered = snapshot.filter(["player1"]);
+      const filtered = snapshot.filter([entities[0].id]);
 
       expect(filtered.size).toBe(1);
-      expect(filtered.hasEntity("player1")).toBe(true);
-      expect(filtered.hasEntity("enemy1")).toBe(false);
+      expect(filtered.hasEntity(entities[0].id)).toBe(true);
+      expect(filtered.hasEntity(entities[1].id)).toBe(false);
     });
 
     it("should merge snapshots", () => {
+      const entities = manager.getAllEntities();
       const snapshot1 = StateSnapshot.fromEntities(100, [entities[0]]);
       const snapshot2 = StateSnapshot.fromEntities(101, [entities[1]]);
 
       const merged = snapshot1.merge(snapshot2);
 
       expect(merged.size).toBe(2);
-      expect(merged.hasEntity("player1")).toBe(true);
-      expect(merged.hasEntity("enemy1")).toBe(true);
+      expect(merged.hasEntity(entities[0].id)).toBe(true);
+      expect(merged.hasEntity(entities[1].id)).toBe(true);
     });
   });
 
   describe("Snapshot Manager", () => {
-    let entities: Entity[];
-    let manager: SnapshotManager;
+    let entityManager: EntityManager;
+    let snapshotManager: SnapshotManager;
 
     beforeEach(() => {
-      entities = [
-        new Entity("player1", "player", {
-          gridPos: { xgrid: 10, ygrid: 10, zheight: 0 },
-        }),
-        new Entity("enemy1", "enemy", {
-          gridPos: { xgrid: 50, ygrid: 50, zheight: 0 },
-        }),
-      ];
+      entityManager = new EntityManager();
+      entityManager.createEntity("player", {
+        gridPos: { xgrid: 10, ygrid: 10, zheight: 0 },
+      });
+      entityManager.createEntity("enemy", {
+        gridPos: { xgrid: 50, ygrid: 50, zheight: 0 },
+      });
 
-      manager = new SnapshotManager({
+      snapshotManager = new SnapshotManager({
         maxSnapshots: 10,
         snapshotInterval: 1,
       });
     });
 
     it("should save and retrieve snapshots", () => {
-      manager.saveSnapshot(100, entities);
-      manager.saveSnapshot(101, entities);
-      manager.saveSnapshot(102, entities);
+      const entities = entityManager.getAllEntities();
+      snapshotManager.saveSnapshot(100, entities);
+      snapshotManager.saveSnapshot(101, entities);
+      snapshotManager.saveSnapshot(102, entities);
 
-      expect(manager.getSnapshotCount()).toBe(3);
-      expect(manager.hasSnapshot(101)).toBe(true);
+      expect(snapshotManager.getSnapshotCount()).toBe(3);
+      expect(snapshotManager.hasSnapshot(101)).toBe(true);
 
-      const snapshot = manager.getSnapshot(101);
+      const snapshot = snapshotManager.getSnapshot(101);
       expect(snapshot).toBeDefined();
       expect(snapshot!.tick).toBe(101);
     });
 
     it("should use circular buffer for bounded memory", () => {
+      const entities = entityManager.getAllEntities();
       // Fill beyond capacity
       for (let i = 0; i < 15; i++) {
-        manager.saveSnapshot(i, entities);
+        snapshotManager.saveSnapshot(i, entities);
       }
 
       // Should only keep maxSnapshots (10)
-      expect(manager.getSnapshotCount()).toBe(10);
-      expect(manager.hasSnapshot(0)).toBe(false); // Oldest evicted
-      expect(manager.hasSnapshot(14)).toBe(true); // Newest present
+      expect(snapshotManager.getSnapshotCount()).toBe(10);
+      expect(snapshotManager.hasSnapshot(0)).toBe(false); // Oldest evicted
+      expect(snapshotManager.hasSnapshot(14)).toBe(true); // Newest present
     });
 
     it("should get snapshots in range", () => {
+      const entities = entityManager.getAllEntities();
       for (let i = 100; i < 110; i++) {
-        manager.saveSnapshot(i, entities);
+        snapshotManager.saveSnapshot(i, entities);
       }
 
-      const range = manager.getSnapshotsInRange(102, 105);
+      const range = snapshotManager.getSnapshotsInRange(102, 105);
       expect(range.length).toBe(4);
       expect(range[0].tick).toBe(102);
       expect(range[3].tick).toBe(105);
     });
 
     it("should get nearest snapshot before tick", () => {
-      manager.saveSnapshot(100, entities);
-      manager.saveSnapshot(105, entities);
-      manager.saveSnapshot(110, entities);
+      const entities = entityManager.getAllEntities();
+      snapshotManager.saveSnapshot(100, entities);
+      snapshotManager.saveSnapshot(105, entities);
+      snapshotManager.saveSnapshot(110, entities);
 
-      const before = manager.getSnapshotBefore(107);
+      const before = snapshotManager.getSnapshotBefore(107);
       expect(before).toBeDefined();
       expect(before!.tick).toBe(105);
     });
 
     it("should track memory usage", () => {
+      const entities = entityManager.getAllEntities();
       for (let i = 0; i < 5; i++) {
-        manager.saveSnapshot(i, entities);
+        snapshotManager.saveSnapshot(i, entities);
       }
 
-      const stats = manager.getMemoryStats();
+      const stats = snapshotManager.getMemoryStats();
       expect(stats.snapshotCount).toBe(5);
       expect(stats.totalEntities).toBe(10); // 5 snapshots × 2 entities
       expect(stats.estimatedBytes).toBeGreaterThan(0);

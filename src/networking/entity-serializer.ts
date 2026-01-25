@@ -143,16 +143,24 @@ export class EntitySerializer {
 
   /**
    * Deserialize a single entity from binary format
+   * @deprecated Use EntityManager.deserializeAllBinary() instead
    */
-  static async deserializeEntity(data: Uint8Array): Promise<Entity> {
-    const reader = new BinaryReader(data);
-    return this.readEntity(reader);
+  static async deserializeEntity(data: Uint8Array): Promise<never> {
+    throw new Error(
+      "EntitySerializer.deserializeEntity() is not supported with SoA storage. " +
+      "Use EntityManager methods instead."
+    );
   }
 
   /**
    * Read an entity from a binary reader
+   * Returns entity data that can be used with EntityManager
    */
-  static async readEntity(reader: BinaryReader): Promise<Entity> {
+  static async readEntity(reader: BinaryReader): Promise<{
+    id: string;
+    type: string;
+    state: EntityState;
+  }> {
     // Read entity type
     const type = reader.readString();
 
@@ -163,7 +171,13 @@ export class EntitySerializer {
     const flags = reader.readUint8();
 
     // Build entity state
-    const state: Partial<EntityState> = {};
+    const state: EntityState = {
+      gridPos: { xgrid: 0, ygrid: 0, zheight: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
+      rotation: 0,
+      speed: 1.0,
+      isMoving: false,
+    };
 
     // Read position
     if (flags & EntitySerializationFlags.HAS_POSITION) {
@@ -172,9 +186,6 @@ export class EntitySerializer {
         ygrid: reader.readFloat32(),
         zheight: reader.readFloat32(),
       };
-    } else {
-      // Default position
-      state.gridPos = { xgrid: 0, ygrid: 0, zheight: 0 };
     }
 
     // Read velocity
@@ -184,47 +195,53 @@ export class EntitySerializer {
         y: reader.readFloat32(),
         z: reader.readFloat32(),
       };
-    } else {
-      // Default velocity
-      state.velocity = { x: 0, y: 0, z: 0 };
     }
 
     // Read rotation
     if (flags & EntitySerializationFlags.HAS_ROTATION) {
       state.rotation = reader.readFloat32();
-    } else {
-      state.rotation = 0;
     }
 
     // Read speed
     if (flags & EntitySerializationFlags.HAS_SPEED) {
       state.speed = reader.readFloat32();
-    } else {
-      state.speed = 1.0;
     }
 
     // Read isMoving flag
     if (flags & EntitySerializationFlags.HAS_IS_MOVING) {
       state.isMoving = reader.readBoolean();
-    } else {
-      state.isMoving = false;
     }
 
-    // Create and return entity
-    // Note: We need to dynamically import Entity to avoid circular dependency
-    const { Entity } = await import("../simulation/entity");
-    return new Entity(id, type, state);
+    // Return entity data (not Entity instance)
+    return { id, type, state };
   }
 
   /**
    * Deserialize multiple entities from binary format
+   * @deprecated Use EntityManager.deserializeAllBinary() instead
    */
-  static async deserializeEntities(data: Uint8Array): Promise<Entity[]> {
+  static async deserializeEntities(
+    data: Uint8Array
+  ): Promise<never[]> {
+    throw new Error(
+      "EntitySerializer.deserializeEntities() is not supported with SoA storage. " +
+      "Use EntityManager.deserializeAllBinary() instead."
+    );
+  }
+
+  /**
+   * Deserialize entity data from binary format (internal use)
+   * Returns array of entity data objects for EntityManager
+   * @internal
+   */
+  static async deserializeEntityData(data: Uint8Array): Promise<
+    Array<{ id: string; type: string; state: EntityState }>
+  > {
     const reader = new BinaryReader(data);
 
     // Read entity count
     const count = reader.readUint16();
-    const entities: Entity[] = [];
+    const entities: Array<{ id: string; type: string; state: EntityState }> = [];
 
     // Read each entity
     for (let i = 0; i < count; i++) {
