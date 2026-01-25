@@ -43,6 +43,8 @@ export type {
   CollisionConfig,
   CollisionResult,
   EntityHandle,
+  CollisionResponse,
+  SimulationCollisionConfig,
 } from './base';
 
 export { CollisionSystem } from './base';

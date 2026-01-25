@@ -222,25 +222,27 @@ Goal: Optimize for V8 engine characteristics and reduce GC pressure.
 
         [X] Pre-allocate pools based on expected max entity count
 
-    [ ] Structure of Arrays (SoA):
+    [X] Structure of Arrays (SoA):
 
-        [ ] Refactor entity data from Array of Objects (AoS) to Structure of Arrays (SoA)
+        [X] Refactor entity data from Array of Objects (AoS) to Structure of Arrays (SoA)
 
-        [ ] Store positions in Float32Array (posX, posY, posZ)
+        [X] Store positions in Float32Array (posX, posY, posZ)
 
-        [ ] Store other entity properties in typed arrays (health, textureId, etc.)
+        [X] Store other entity properties in typed arrays (health, textureId, etc.)
 
-        [ ] Ensure zero-overhead passing to WebGL buffers
+        [X] Ensure zero-overhead passing to WebGL buffers
 
-    [ ] Spatial Hashing for Collision Detection:
+    [X] Spatial Hashing for Collision Detection:
 
-        [ ] Implement spatial hash/grid separate from depth sorting system
+        [X] Implement spatial hash/grid separate from depth sorting system
 
-        [ ] Create buckets (e.g., 64x64 grids) for entity storage
+        [X] Create buckets (e.g., 64x64 grids) for entity storage
 
-        [ ] Implement query system for same/adjacent bucket checks
+        [X] Implement query system for same/adjacent bucket checks
 
-        [ ] Optimize collision detection from O(N²) to O(N) average case
+        [X] Optimize collision detection from O(N²) to O(N) average case
+
+        [X] Integrate collision system into simulation loop (opt-in with configurable responses)
 
 Phase 9: Advanced Rendering Features (Optional/Later)
 

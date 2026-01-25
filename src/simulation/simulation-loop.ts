@@ -13,6 +13,9 @@ import { CommandQueue } from "../input/command-queue";
 import { CommandType, type Command, type MoveCommand } from "../input/command-types";
 import { EntityManager } from "./entity-manager";
 import { Entity } from "./entity";
+import { createCollisionSystem } from "./collision";
+import type { SimulationCollisionConfig, CollisionPair, CollisionResponse } from "./collision/base";
+import { CollisionResponseHandler } from "./collision-response";
 
 /**
  * Configuration for the simulation loop
@@ -27,6 +30,12 @@ export interface SimulationConfig {
    * Enable debug logging
    */
   debug: boolean;
+
+  /**
+   * Collision detection configuration
+   * Optional - collision detection is disabled by default
+   */
+  collision?: SimulationCollisionConfig;
 }
 
 /**
@@ -58,7 +67,7 @@ const DIRECTION_DELTAS: Record<string, { dx: number; dy: number }> = {
  * - Maintain the entity manager
  * - Process commands from the command queue
  * - Update entity positions based on commands
- * - Handle collision detection (future)
+ * - Handle collision detection (optional, opt-in)
  * - Handle game logic (future)
  *
  * NOT responsible for:
@@ -75,6 +84,11 @@ export class SimulationLoop {
   // Track selected entity for commands that target entities
   private selectedEntityId: string | null = null;
 
+  // Collision system (optional)
+  private collisionSystem?: ReturnType<typeof createCollisionSystem>;
+  private collisionResponseHandler?: CollisionResponseHandler;
+  private collisionEnabled: boolean = false;
+
   /**
    * Create a new simulation loop
    * @param commandQueue - The command queue to consume from
@@ -85,8 +99,16 @@ export class SimulationLoop {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.entityManager = new EntityManager();
 
+    // Initialize collision system (optional)
+    if (this.config.collision?.enabled) {
+      this.initializeCollisionSystem();
+    }
+
     if (this.config.debug) {
       console.log("[Simulation] Initialized with config:", this.config);
+      if (this.collisionEnabled) {
+        console.log("[Simulation] Collision detection enabled");
+      }
     }
   }
 
@@ -111,6 +133,7 @@ export class SimulationLoop {
    * 1. Saves previous state for all entities (for interpolation)
    * 2. Consumes and processes all commands for this tick
    * 3. Updates entity positions based on velocity and time
+   * 4. Handles collision detection (if enabled)
    *
    * @param dt - Delta time in seconds (fixed timestep from Ticker)
    *
@@ -127,7 +150,12 @@ export class SimulationLoop {
     // Step 3: Update entity positions based on velocity
     this.updateEntityPositions(dt);
 
-    // Step 4: Increment tick counter
+    // Step 4: Handle collision detection (if enabled)
+    if (this.collisionEnabled) {
+      this.handleCollisions();
+    }
+
+    // Step 5: Increment tick counter
     this._currentTick++;
 
     if (this.config.debug && this._currentTick % 60 === 0) {
@@ -303,6 +331,101 @@ export class SimulationLoop {
         console.log(`[Simulation] ${entity.id} moved to (${pos.xgrid}, ${pos.ygrid}, ${pos.zheight})`);
       }
     }
+  }
+
+  /**
+   * Initialize collision system
+   * @private
+   */
+  private initializeCollisionSystem(): void {
+    const collisionConfig = this.config.collision!;
+
+    // Create collision system
+    this.collisionSystem = createCollisionSystem({
+      type: collisionConfig.type || 'spatial-hash',
+      cellSize: collisionConfig.cellSize || 50,
+    });
+
+    // Create response handler
+    this.collisionResponseHandler = new CollisionResponseHandler(collisionConfig.onTrigger);
+
+    this.collisionEnabled = true;
+
+    if (this.config.debug) {
+      console.log("[Simulation] Collision system initialized:", collisionConfig.type || 'spatial-hash');
+    }
+  }
+
+  /**
+   * Handle collision detection and response
+   * @private
+   */
+  private async handleCollisions(): Promise<void> {
+    if (!this.collisionSystem || !this.collisionResponseHandler) {
+      return;
+    }
+
+    // Get all entity handles from storage
+    const storage = this.entityManager.getStorage();
+    const handles = new Map<string, { index: number; generation: number }>();
+
+    // Build handle map from all active entities
+    const allHandles = storage.getAllHandles();
+    for (const handle of allHandles) {
+      const id = storage.getId(handle.index);
+      handles.set(id, handle);
+    }
+
+    const positions = storage.getPositions();
+
+    // Update spatial hash
+    this.collisionSystem.update(handles, positions);
+
+    // Find all collisions
+    const result = await this.collisionSystem.findAllCollisions(handles, positions);
+
+    if (result.pairs.length > 0 && this.config.debug) {
+      console.log(`[Simulation] Found ${result.pairs.length} collisions in ${result.executionTime.toFixed(2)}ms`);
+    }
+
+    // Apply collision responses
+    for (const pair of result.pairs) {
+      const response = this.getCollisionResponse(pair);
+      this.collisionResponseHandler.applyResponse(pair, response, storage);
+    }
+  }
+
+  /**
+   * Get collision response type for a collision pair
+   * @private
+   */
+  private getCollisionResponse(pair: CollisionPair): CollisionResponse {
+    const collisionConfig = this.config.collision!;
+
+    // Check per-type responses first
+    if (collisionConfig.perTypeResponses) {
+      const storage = this.entityManager.getStorage();
+
+      try {
+        const typeA = storage.getTypeId(pair.entityA.index);
+        const typeB = storage.getTypeId(pair.entityB.index);
+
+        // Use entityA's response type if defined
+        if (collisionConfig.perTypeResponses.has(typeA)) {
+          return collisionConfig.perTypeResponses.get(typeA)!;
+        }
+
+        // Use entityB's response type if defined
+        if (collisionConfig.perTypeResponses.has(typeB)) {
+          return collisionConfig.perTypeResponses.get(typeB)!;
+        }
+      } catch {
+        // Entity might not be valid, use default
+      }
+    }
+
+    // Use default response
+    return collisionConfig.defaultResponse || 'BLOCK';
   }
 
   /**

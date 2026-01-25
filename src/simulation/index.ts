@@ -23,3 +23,6 @@ export type { EntityQuery } from "./entity-manager";
 // Simulation loop
 export { SimulationLoop } from "./simulation-loop";
 export type { SimulationConfig } from "./simulation-loop";
+
+// Collision response
+export { CollisionResponseHandler } from "./collision-response";

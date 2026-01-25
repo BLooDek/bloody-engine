@@ -31,12 +31,25 @@ export interface Circle {
 }
 
 /**
+ * Collision response type
+ */
+export type CollisionResponse = 'BLOCK' | 'BOUNCE' | 'SLIDE' | 'TRIGGER' | 'IGNORE';
+
+/**
  * Collision pair result
  */
 export interface CollisionPair {
   entityA: EntityHandle;
   entityB: EntityHandle;
   distance: number;
+  /**
+   * Collision normal (direction from A to B, normalized)
+   */
+  normal?: { x: number; y: number };
+  /**
+   * Penetration depth (how much entities overlap)
+   */
+  penetration?: number;
 }
 
 /**
@@ -75,6 +88,52 @@ export interface CollisionConfig {
    * Entities farther apart are ignored
    */
   maxDistance?: number;
+}
+
+/**
+ * Simulation collision configuration (for SimulationLoop)
+ */
+export interface SimulationCollisionConfig {
+  /**
+   * Enable collision detection
+   * @default false
+   */
+  enabled?: boolean;
+
+  /**
+   * Collision system type
+   * @default 'spatial-hash'
+   */
+  type?: 'spatial-hash' | 'worker' | 'gpu' | 'hybrid';
+
+  /**
+   * Cell size for spatial hashing
+   * @default 50
+   */
+  cellSize?: number;
+
+  /**
+   * Default collision response for all entities
+   * @default 'BLOCK'
+   */
+  defaultResponse?: CollisionResponse;
+
+  /**
+   * Per-entity-type collision responses
+   * Maps entity type ID to response type
+   */
+  perTypeResponses?: Map<number, CollisionResponse>;
+
+  /**
+   * Number of worker threads (for 'worker' type)
+   */
+  workerCount?: number;
+
+  /**
+   * Callback function for TRIGGER response
+   * Called when entities with TRIGGER response collide
+   */
+  onTrigger?: (pair: CollisionPair) => void;
 }
 
 /**
