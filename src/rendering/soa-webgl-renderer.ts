@@ -15,6 +15,17 @@ import type { Shader } from "../core/shader";
 import type { Camera } from "./camera";
 import type { EntityStorage } from "../simulation/entity-storage";
 
+// WebGL2 buffer mapping constants (not in TypeScript definitions)
+const MAP_READ_BIT = 0x0001;
+const MAP_WRITE_BIT = 0x0002;
+const MAP_INVALIDATE_RANGE_BIT = 0x0004;
+const MAP_INVALIDATE_BUFFER_BIT = 0x0008;
+const MAP_FLUSH_EXPLICIT_BIT = 0x0010;
+const MAP_UNSYNCHRONIZED_BIT = 0x0020;
+// Persistent/coherent mapping may not be available in all implementations
+const MAP_PERSISTENT_BIT = 0x0040;
+const MAP_COHERENT_BIT = 0x0080;
+
 /**
  * SoA WebGL renderer with persistent buffer mapping
  * Requires WebGL2 context
@@ -132,12 +143,15 @@ export class SoaWebGLRenderer {
     this.gl.bufferData(this.gl.ARRAY_BUFFER, byteSize, this.gl.DYNAMIC_DRAW);
 
     // Map persistently for direct CPU access
+    // Note: Persistent/coherent mapping may not be available in all WebGL implementations
     const flags =
-      this.gl.MAP_WRITE_BIT |
-      this.gl.MAP_PERSISTENT_BIT |
-      this.gl.MAP_COHERENT_BIT;
+      MAP_WRITE_BIT |
+      MAP_PERSISTENT_BIT |
+      MAP_COHERENT_BIT;
 
-    const mappedPtr = this.gl.mapBufferRange(
+    // mapBufferRange is part of WebGL2 but may not be in type definitions
+    const glAny = this.gl as any;
+    const mappedPtr = glAny.mapBufferRange(
       this.gl.ARRAY_BUFFER,
       0,
       byteSize,
@@ -378,31 +392,34 @@ export class SoaWebGLRenderer {
    * Clean up GPU resources
    */
   dispose(): void {
+    // Use type assertion for unmapBuffer (not in WebGL2RenderingContext type definition)
+    const glAny = this.gl as any;
+
     // Unmap buffers
     if (this.positionBuffer) {
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-      this.gl.unmapBuffer(this.gl.ARRAY_BUFFER);
+      glAny.unmapBuffer(this.gl.ARRAY_BUFFER);
       this.gl.deleteBuffer(this.positionBuffer);
       this.positionBuffer = null;
     }
 
     if (this.colorBuffer) {
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.colorBuffer);
-      this.gl.unmapBuffer(this.gl.ARRAY_BUFFER);
+      glAny.unmapBuffer(this.gl.ARRAY_BUFFER);
       this.gl.deleteBuffer(this.colorBuffer);
       this.colorBuffer = null;
     }
 
     if (this.texCoordBuffer) {
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
-      this.gl.unmapBuffer(this.gl.ARRAY_BUFFER);
+      glAny.unmapBuffer(this.gl.ARRAY_BUFFER);
       this.gl.deleteBuffer(this.texCoordBuffer);
       this.texCoordBuffer = null;
     }
 
     if (this.texIdBuffer) {
       this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texIdBuffer);
-      this.gl.unmapBuffer(this.gl.ARRAY_BUFFER);
+      glAny.unmapBuffer(this.gl.ARRAY_BUFFER);
       this.gl.deleteBuffer(this.texIdBuffer);
       this.texIdBuffer = null;
     }

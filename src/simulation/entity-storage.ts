@@ -17,6 +17,21 @@ import type { EntityState } from "./entity";
 import type { GridCoord } from "../rendering/projection";
 
 /**
+ * Typed array union type for custom properties
+ * Excludes BigInt arrays as they return bigint instead of number
+ */
+type TypedArray =
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array
+  | Float64Array;
+
+/**
  * Typed array constructor for custom properties
  */
 type TypedArrayConstructor = {
@@ -28,7 +43,7 @@ type TypedArrayConstructor = {
  */
 interface CustomProperty {
   array: TypedArray;
-  type: 'Float32Array' | 'Uint32Array' | 'Uint8Array' | 'Int32Array' | 'Float64Array';
+  type: 'Int8Array' | 'Uint8Array' | 'Uint8ClampedArray' | 'Int16Array' | 'Uint16Array' | 'Int32Array' | 'Uint32Array' | 'Float32Array' | 'Float64Array';
 }
 
 export class EntityStorage {
