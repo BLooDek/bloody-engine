@@ -1,6 +1,6 @@
 {
   "name": "bloody-engine",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "description": "A WebGL-based 2.5D graphics engine for isometric rendering",
   "license": "MIT",
   "type": "module",
@@ -42,6 +42,7 @@
     "build:node": "vite build --config vite.config.node.ts",
     "build:demo": "vite build --config vite.config.demo.ts",
     "demo": "npm run build:demo && node dist/demo/index.js",
+    "demo:coordinates": "npm run build && node dist/node/examples/coordinate-systems-demo.js",
     "test:visual": "node test-visual.js",
     "test:determinism": "node test-determinism.js",
     "test": "vitest run",

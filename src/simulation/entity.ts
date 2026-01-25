@@ -8,9 +8,12 @@ import type { GridCoord } from "../rendering/projection";
 /**
  * Entity state at a specific point in time
  * Used for state interpolation and deterministic replay
+ *
+ * Position is stored as floats for smooth, continuous movement.
+ * Use getGridPos() to get integer grid coordinates when needed.
  */
 export interface EntityState {
-  gridPos: GridCoord;
+  gridPos: GridCoord; // Float positions for sub-grid tracking
   velocity: { x: number; y: number; z: number };
   rotation: number;
   speed: number;
@@ -60,6 +63,42 @@ export class Entity {
   }
 
   /**
+   * Get position as floats (for smooth movement and rendering)
+   * Returns a copy to prevent mutation
+   */
+  getPosition(): { x: number; y: number; z: number } {
+    return {
+      x: this._state.gridPos.xgrid,
+      y: this._state.gridPos.ygrid,
+      z: this._state.gridPos.zheight,
+    };
+  }
+
+  /**
+   * Get grid position as integers (for logic that needs discrete cells)
+   * Uses Math.floor for consistent cell mapping
+   */
+  getGridPos(): { x: number; y: number; z: number } {
+    return {
+      x: Math.floor(this._state.gridPos.xgrid),
+      y: Math.floor(this._state.gridPos.ygrid),
+      z: Math.floor(this._state.gridPos.zheight),
+    };
+  }
+
+  /**
+   * Get rounded grid position (nearest integer)
+   * Uses Math.round for picking/clicking operations
+   */
+  getRoundedGridPos(): { x: number; y: number; z: number } {
+    return {
+      x: Math.round(this._state.gridPos.xgrid),
+      y: Math.round(this._state.gridPos.ygrid),
+      z: Math.round(this._state.gridPos.zheight),
+    };
+  }
+
+  /**
    * Store current state as previous state before updating
    */
   saveState(): void {
@@ -72,8 +111,17 @@ export class Entity {
 
   /**
    * Set grid position directly (instant movement)
+   * Accepts floats for sub-grid positioning
    */
   setGridPos(x: number, y: number, z: number = 0): void {
+    this._state.gridPos = { xgrid: x, ygrid: y, zheight: z };
+  }
+
+  /**
+   * Set position using integers (for discrete grid movement)
+   * Convenience method for logic that works with integer coordinates
+   */
+  setGridPosInt(x: number, y: number, z: number = 0): void {
     this._state.gridPos = { xgrid: x, ygrid: y, zheight: z };
   }
 
@@ -86,12 +134,26 @@ export class Entity {
   }
 
   /**
-   * Move by grid coordinates
+   * Move by relative amount
+   * Accepts floats for smooth, sub-grid movement
+   * @param dx Movement in X (can be fractional)
+   * @param dy Movement in Y (can be fractional)
+   * @param dz Movement in Z (can be fractional)
    */
   move(dx: number, dy: number, dz: number = 0): void {
     this._state.gridPos.xgrid += dx;
     this._state.gridPos.ygrid += dy;
     this._state.gridPos.zheight += dz;
+  }
+
+  /**
+   * Move by integer grid cells (for discrete movement)
+   * Convenience method for logic that needs whole-cell movement
+   */
+  moveGridCells(dx: number, dy: number, dz: number = 0): void {
+    this._state.gridPos.xgrid += Math.floor(dx);
+    this._state.gridPos.ygrid += Math.floor(dy);
+    this._state.gridPos.zheight += Math.floor(dz);
   }
 
   /**
@@ -110,7 +172,8 @@ export class Entity {
 
   /**
    * Update entity based on velocity and delta time
-   * Returns true if position changed
+   * Now properly tracks fractional movement for smooth animation
+   * Returns true if position changed (by any amount)
    */
   updateVelocity(dt: number): boolean {
     if (!this._state.isMoving) {
@@ -121,18 +184,13 @@ export class Entity {
     const dy = this._state.velocity.y * this._state.speed * dt;
     const dz = this._state.velocity.z * this._state.speed * dt;
 
-    // For grid-based movement, we accumulate fractional movement
-    // In a full implementation, you'd track sub-grid position separately
-    if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1 || Math.abs(dz) >= 1) {
-      this.move(
-        Math.sign(dx),
-        Math.sign(dy),
-        Math.sign(dz)
-      );
-      return true;
-    }
+    // Apply movement directly to position (now supports fractional movement)
+    this._state.gridPos.xgrid += dx;
+    this._state.gridPos.ygrid += dy;
+    this._state.gridPos.zheight += dz;
 
-    return false;
+    // Return true if there was any movement
+    return dx !== 0 || dy !== 0 || dz !== 0;
   }
 
   /**
@@ -150,6 +208,7 @@ export class Entity {
 
   /**
    * Serialize entity state for transmission/saving
+   * Preserves floating-point positions for smooth movement
    */
   serialize(): string {
     return JSON.stringify({

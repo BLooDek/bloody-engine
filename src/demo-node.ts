@@ -497,20 +497,21 @@ async function runSpriteBatchRendererV2Demo() {
     const moveAmount = moveSpeed * deltaTime;
 
     // Movement: WASD or Arrow keys
+    // Note: Camera moves in screen space (Y-DOWN: increasing Y = down on screen)
     if (keys.has("w") || keys.has("arrowup")) {
-      camera.y += moveAmount;
+      camera.y -= moveAmount;  // Move camera up (decrease Y in screen space)
       cameraMoved = true;
     }
     if (keys.has("s") || keys.has("arrowdown")) {
-      camera.y -= moveAmount;
+      camera.y += moveAmount;  // Move camera down (increase Y in screen space)
       cameraMoved = true;
     }
     if (keys.has("a") || keys.has("arrowleft")) {
-      camera.x -= moveAmount;
+      camera.x -= moveAmount;  // Move camera left (decrease X)
       cameraMoved = true;
     }
     if (keys.has("d") || keys.has("arrowright")) {
-      camera.x += moveAmount;
+      camera.x += moveAmount;  // Move camera right (increase X)
       cameraMoved = true;
     }
 
