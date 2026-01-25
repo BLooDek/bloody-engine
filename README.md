@@ -22,6 +22,38 @@ A WebGL-based 2.5D graphics engine for isometric rendering on Node.js, written i
 npm install bloody-engine
 ```
 
+## Understanding Coordinate Systems
+
+**⚠️ IMPORTANT**: Before building your game, understand the coordinate systems to avoid inverted controls!
+
+Bloody Engine uses different coordinate systems for different purposes. Mixing these up is the #1 cause of inverted controls.
+
+### Quick Summary
+
+| System | Used For | Y-Axis | Example |
+|--------|----------|--------|---------|
+| **Grid Space** | Game logic, entity positions | Y-UP (↓ Y = North/Up) | `entity.move(0, -1, 0)` moves up on screen |
+| **Screen Space** | Rendering, camera, mouse | Y-DOWN (↓ Y = Down) | `camera.y += 10` moves camera down |
+
+**Golden Rule**: Use grid space for game logic, transform to screen space only for rendering.
+
+### Common Mistake
+
+❌ **Wrong**: `camera.y += 1` for "up" movement (moves down on screen!)
+✅ **Right**: Use direction deltas: `entity.move(0, -1, 0)` for North
+
+### WASD Controls
+
+| Key | Direction | Delta | Screen Effect |
+|-----|-----------|-------|---------------|
+| **W** / ↑ | North | `{dx: 0, dy: -1}` | ✅ Up |
+| **S** / ↓ | South | `{dx: 0, dy: 1}` | ✅ Down |
+| **A** / ← | West | `{dx: -1, dy: 0}` | ✅ Left |
+| **D** / → | East | `{dx: 1, dy: 0}` | ✅ Right |
+
+📖 **Full Guide**: [docs/COORDINATE_SYSTEMS.md](docs/COORDINATE_SYSTEMS.md)
+🚀 **Interactive Demo**: Run `npm run demo:coordinates` after building
+
 ## API Overview
 
 ### Core Graphics
