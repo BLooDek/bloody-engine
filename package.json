@@ -43,6 +43,7 @@
     "build:demo": "vite build --config vite.config.demo.ts",
     "demo": "npm run build:demo && node dist/demo/index.js",
     "demo:coordinates": "npm run build && node dist/node/examples/coordinate-systems-demo.js",
+    "benchmark:collision": "tsx benchmarks/collision-benchmark.ts",
     "test:visual": "node test-visual.js",
     "test:determinism": "node test-determinism.js",
     "test": "vitest run",
