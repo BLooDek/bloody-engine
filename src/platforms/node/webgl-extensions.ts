@@ -28,16 +28,29 @@ export function getInstancingMethods(gl: any): {
   const ext = gl.getExtension('ANGLE_instanced_arrays');
   if (ext) {
     // headless-gl uses underscored method names
+    // These are already bound to the extension context, so we use them directly
     const drawArrays = ext.drawArraysInstanced || ext._drawArraysInstanced;
     const drawElements = ext.drawElementsInstanced || ext._drawElementsInstanced;
     const divisor = ext.vertexAttribDivisor || ext._vertexAttribDivisor;
 
     if (drawArrays && divisor) {
-      return {
-        drawArraysInstanced: drawArrays.bind(ext),
-        drawElementsInstanced: drawElements?.bind(ext) || drawArrays.bind(ext),
-        vertexAttribDivisor: divisor.bind(ext),
-      };
+      // Check if these are native functions (already bound) or need to be bound
+      // In headless-gl, the underscored versions are already bound native functions
+      if (ext._drawArraysInstanced && typeof ext._drawArraysInstanced === 'function') {
+        // Use underscored versions directly (already bound in headless-gl)
+        return {
+          drawArraysInstanced: ext._drawArraysInstanced,
+          drawElementsInstanced: ext._drawElementsInstanced,
+          vertexAttribDivisor: ext._vertexAttribDivisor,
+        };
+      } else {
+        // Try to bind the methods (for standard WebGL2 or other implementations)
+        return {
+          drawArraysInstanced: drawArrays.bind(ext),
+          drawElementsInstanced: drawElements?.bind(ext) || drawArrays.bind(ext),
+          vertexAttribDivisor: divisor.bind(ext),
+        };
+      }
     }
   }
 

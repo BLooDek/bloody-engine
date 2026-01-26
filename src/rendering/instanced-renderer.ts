@@ -309,6 +309,9 @@ export class InstancedRenderer {
     if (posAttr !== -1) {
       this.gl.enableVertexAttribArray(posAttr);
       this.gl.vertexAttribPointer(posAttr, 2, this.gl.FLOAT, false, 0, 0);
+      // CRITICAL: Reset divisor to 0 (per-vertex) for static attributes
+      // This ensures compatibility when switching between instanced and batch rendering
+      this.instancingMethods.vertexAttribDivisor(posAttr, 0);
     }
 
     // UV attribute
@@ -317,6 +320,8 @@ export class InstancedRenderer {
     if (uvAttr !== -1) {
       this.gl.enableVertexAttribArray(uvAttr);
       this.gl.vertexAttribPointer(uvAttr, 2, this.gl.FLOAT, false, 0, 0);
+      // CRITICAL: Reset divisor to 0 (per-vertex) for static attributes
+      this.instancingMethods.vertexAttribDivisor(uvAttr, 0);
     }
   }
 
@@ -361,6 +366,24 @@ export class InstancedRenderer {
 
     // Configure instance attributes with divisor
     this.setupInstanceAttributes(region.offset);
+
+    // CRITICAL: Re-bind static geometry buffers before drawing
+    // This ensures the static attributes (aPosition, aTexCoord) have valid buffer bindings
+    // when we call drawArraysInstanced
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+    const posAttr = this.shader.getAttributeLocation("aPosition");
+    if (posAttr !== -1) {
+      this.gl.vertexAttribPointer(posAttr, 2, this.gl.FLOAT, false, 0, 0);
+    }
+
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.uvBuffer);
+    const uvAttr = this.shader.getAttributeLocation("aTexCoord");
+    if (uvAttr !== -1) {
+      this.gl.vertexAttribPointer(uvAttr, 2, this.gl.FLOAT, false, 0, 0);
+    }
+
+    // Now unbind to avoid confusion (vertex attribute pointers are already set)
+    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
 
     // Draw instanced (use extension method if available)
     this.instancingMethods.drawArraysInstanced(
