@@ -556,14 +556,24 @@ varying float vTexIndex;
 uniform vec3 uCamera;      // x, y, zoom
 uniform vec2 uResolution;  // width, height
 uniform float uZScale;
+uniform float uRotation;   // Rotation angle in radians
+uniform vec2 uQuadSize;    // Additional quad size multiplier
 
 void main() {
   // Calculate local quad position with size
   vec2 localPos = aPosition * aSize;
 
+  // Apply rotation if enabled (matches V6 behavior)
+  float cosR = cos(uRotation);
+  float sinR = sin(uRotation);
+  vec2 rotatedOffset = vec2(
+    localPos.x * cosR - localPos.y * sinR,
+    localPos.x * sinR + localPos.y * cosR
+  ) * uQuadSize;
+
   // TOP-DOWN: Use grid position directly as world position
   // NO isometric projection - simple 2D top-down view
-  vec2 worldPos = aGridPosition + localPos;
+  vec2 worldPos = aGridPosition + rotatedOffset;
 
   // Z is used for depth sorting (lower values = background, higher = foreground)
   // Not subtracted from Y since this is top-down, not isometric

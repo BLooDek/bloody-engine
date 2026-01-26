@@ -448,6 +448,18 @@ export class InstancedRenderer {
     if (zScaleUniform !== null) {
       this.gl.uniform1f(zScaleUniform, this.zScale);
     }
+
+    // Rotation support (matches V6 shader)
+    const rotationUniform = this.shader.getUniformLocation("uRotation");
+    if (rotationUniform !== null) {
+      this.gl.uniform1f(rotationUniform, 0.0); // Fixed rotation to 0 for now
+    }
+
+    // Quad size multiplier (matches V6 shader behavior)
+    const quadSizeUniform = this.shader.getUniformLocation("uQuadSize");
+    if (quadSizeUniform !== null) {
+      this.gl.uniform2f(quadSizeUniform, 1.0, 1.0); // Scale handled by aSize attribute
+    }
   }
 
   /**
