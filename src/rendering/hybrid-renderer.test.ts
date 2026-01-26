@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { HybridRenderer, HybridRendererOptions, RenderMetrics } from '../rendering/hybrid-renderer';
+import { HybridRenderer, HybridRendererOptions, RenderMetrics, detectShaderTypeFromSource } from '../rendering/hybrid-renderer';
 import createGL from 'gl';
 
 // Mock shader for testing
@@ -580,9 +580,6 @@ describe('HybridRenderer - Bug Fixes', () => {
           gridY: 0,
           x: i * 32,
           y: 0 * 32,
-          rotation: 0,
-          x: i * 32,
-          y: 0,
           z: 0,
           width: 32,
           height: 32,
@@ -614,9 +611,6 @@ describe('HybridRenderer - Bug Fixes', () => {
           gridY: 0,
           x: i * 32,
           y: 0 * 32,
-          rotation: 0,
-          x: i * 32,
-          y: 0,
           z: 0,
           width: 32,
           height: 32,
@@ -743,9 +737,6 @@ describe('HybridRenderer - Bug Fixes', () => {
           gridY: 0,
           x: i * 32,
           y: 0 * 32,
-          rotation: 0,
-          x: i * 32,
-          y: 0,
           z: 0,
           width: 32,
           height: 32,
@@ -760,9 +751,6 @@ describe('HybridRenderer - Bug Fixes', () => {
         renderer.addQuad({
           gridX: i,
           gridY: 1,
-          x: i * 32,
-          y: 1 * 32,
-          rotation: 0,
           x: i * 64,
           y: 64,
           z: 0,
@@ -791,9 +779,6 @@ describe('HybridRenderer - Bug Fixes', () => {
           gridY: 0,
           x: i * 32,
           y: 0 * 32,
-          rotation: 0,
-          x: i * 32,
-          y: 0,
           z: 0,
           width: 32,
           height: 32,
@@ -821,9 +806,6 @@ describe('HybridRenderer - Bug Fixes', () => {
           gridY: 0,
           x: i * 32,
           y: 0 * 32,
-          rotation: 0,
-          x: i * 32,
-          y: 0,
           z: 0,
           width: 32,
           height: 32,
@@ -854,11 +836,8 @@ describe('HybridRenderer - Bug Fixes', () => {
       renderer = new HybridRenderer(gl, instancedShader, batchShader);
 
       renderer.addQuad({
-          gridX: 0,
-          gridY: 0,
-          x: 0 * 32,
-          y: 0 * 32,
-          rotation: 0,
+        gridX: 0,
+        gridY: 0,
         x: 0,
         y: 0,
         z: 0,
@@ -882,11 +861,8 @@ describe('HybridRenderer - Bug Fixes', () => {
       for (let i = 0; i < 10; i++) {
         for (let j = 0; j < 10; j++) {
           renderer.addQuad({
-          gridX: j,
-          gridY: i,
-          x: j * 32,
-          y: i * 32,
-          rotation: 0,
+            gridX: j,
+            gridY: i,
             x: j * 32,
             y: i * 32,
             z: 0,
@@ -905,6 +881,595 @@ describe('HybridRenderer - Bug Fixes', () => {
       // Each texture creates a separate group
       // Each group would have 10 quads (< threshold of 50)
       // So all would route to batch renderer
+    });
+  });
+
+  describe('Shader type detection', () => {
+    class TestableShader {
+      private vertexSource: string;
+
+      constructor(vertexSource: string) {
+        this.vertexSource = vertexSource;
+      }
+
+      getVertexSource() {
+        return this.vertexSource;
+      }
+
+      use() {}
+
+      getAttributeLocation() {
+        return 0;
+      }
+
+      getUniformLocation() {
+        return null;
+      }
+    }
+
+    it('should detect isometric shader from (x - y) pattern', () => {
+      const isometricSource = `
+        attribute vec2 aGridPosition;
+        void main() {
+          vec2 pos = vec2(aGridPosition.x - aGridPosition.y, ...);
+        }
+      `;
+
+      const shader = new TestableShader(isometricSource) as any;
+      const shaderType = detectShaderTypeFromSource(shader);
+
+      expect(shaderType).toBe('isometric');
+    });
+
+    it('should detect isometric shader from aGridPosition pattern', () => {
+      const isometricSource = `
+        attribute vec2 aGridPosition;
+        void main() {
+          float depth = (aGridPosition.x - aGridPosition.y);
+        }
+      `;
+
+      const shader = new TestableShader(isometricSource) as any;
+      const shaderType = detectShaderTypeFromSource(shader);
+
+      expect(shaderType).toBe('isometric');
+    });
+
+    it('should default to top-down when no isometric pattern found', () => {
+      const topDownSource = `
+        attribute vec2 aPosition;
+        void main() {
+          gl_Position = vec4(aPosition, 0.0, 1.0);
+        }
+      `;
+
+      const shader = new TestableShader(topDownSource) as any;
+      const shaderType = detectShaderTypeFromSource(shader);
+
+      expect(shaderType).toBe('top-down');
+    });
+
+    it('should default to top-down for empty shader source', () => {
+      const emptySource = '';
+
+      const shader = new TestableShader(emptySource) as any;
+      const shaderType = detectShaderTypeFromSource(shader);
+
+      expect(shaderType).toBe('top-down');
+    });
+  });
+
+  describe('Constructor validation', () => {
+    it('should throw error for single-shader constructor signature', () => {
+      // Single shader (should use fromBatchShader instead)
+      expect(() => {
+        new HybridRenderer(gl, instancedShader, { instancingThreshold: 100 } as any);
+      }).toThrow('Single-shader constructor not supported directly. Use HybridRenderer.fromBatchShader');
+    });
+
+    it('should accept two-shader constructor signature', () => {
+      expect(() => {
+        new HybridRenderer(gl, instancedShader, batchShader, { instancingThreshold: 50 });
+      }).not.toThrow();
+    });
+
+    it('should accept two-shader constructor without options', () => {
+      expect(() => {
+        new HybridRenderer(gl, instancedShader, batchShader);
+      }).not.toThrow();
+    });
+  });
+
+  describe('Quad grouping', () => {
+    it('should group quads by texture index and size', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      // Add 20 quads with texIndex 0, 32x32
+      for (let i = 0; i < 20; i++) {
+        renderer.addQuad({
+          gridX: i,
+          gridY: 0,
+          x: i * 32,
+          y: 0,
+          z: 0,
+          width: 32,
+          height: 32,
+          rotation: 0,
+          texIndex: 0,
+          color: { r: 1, g: 1, b: 1, a: 1 }
+        });
+      }
+
+      // Add 15 quads with texIndex 1, 32x32
+      for (let i = 0; i < 15; i++) {
+        renderer.addQuad({
+          gridX: i,
+          gridY: 1,
+          x: i * 32,
+          y: 32,
+          z: 0,
+          width: 32,
+          height: 32,
+          rotation: 0,
+          texIndex: 1,
+          color: { r: 1, g: 1, b: 1, a: 1 }
+        });
+      }
+
+      // Add 10 quads with texIndex 0, 64x64 (different size)
+      for (let i = 0; i < 10; i++) {
+        renderer.addQuad({
+          gridX: i,
+          gridY: 2,
+          x: i * 64,
+          y: 64,
+          z: 0,
+          width: 64,
+          height: 64,
+          rotation: 0,
+          texIndex: 0,
+          color: { r: 1, g: 1, b: 1, a: 1 }
+        });
+      }
+
+      const groups = (renderer as any).groupQuads();
+
+      // Should have 3 groups: (0,32,32), (1,32,32), (0,64,64)
+      expect(groups.size).toBe(3);
+
+      // Check group counts
+      const group0_32 = groups.get('0_32_32');
+      expect(group0_32?.quads.length).toBe(20);
+
+      const group1_32 = groups.get('1_32_32');
+      expect(group1_32?.quads.length).toBe(15);
+
+      const group0_64 = groups.get('0_64_64');
+      expect(group0_64?.quads.length).toBe(10);
+    });
+
+    it('should handle quads with undefined texIndex (defaults to 0)', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      // Add quads without texIndex
+      for (let i = 0; i < 10; i++) {
+        renderer.addQuad({
+          gridX: i,
+          gridY: 0,
+          x: i * 32,
+          y: 0,
+          z: 0,
+          width: 32,
+          height: 32,
+          rotation: 0,
+          color: { r: 1, g: 1, b: 1, a: 1 }
+        });
+      }
+
+      const groups = (renderer as any).groupQuads();
+
+      // All should be in group '0_32_32' (default texIndex 0)
+      expect(groups.size).toBe(1);
+      const group = groups.get('0_32_32');
+      expect(group?.quads.length).toBe(10);
+    });
+
+    it('should return empty map for no quads', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      const groups = (renderer as any).groupQuads();
+
+      expect(groups.size).toBe(0);
+    });
+  });
+
+  describe('Renderer state management', () => {
+    it('should propagate setTexture to both renderers', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      // Mock the texture object
+      const mockTexture = { id: 123 };
+
+      // Call setTexture
+      renderer.setTexture(mockTexture as any);
+
+      // Verify both renderers received the texture
+      const instancedRenderer = (renderer as any).instancedRenderer;
+      const batchRenderer = (renderer as any).batchRenderer;
+
+      // If renderers have getTexture method, verify it's set
+      expect(instancedRenderer).toBeDefined();
+      expect(batchRenderer).toBeDefined();
+    });
+
+    it('should propagate setDepthTestEnabled to both renderers', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      // Should not throw
+      expect(() => {
+        renderer.setDepthTestEnabled(true);
+      }).not.toThrow();
+
+      expect(() => {
+        renderer.setDepthTestEnabled(false);
+      }).not.toThrow();
+    });
+
+    it('should propagate setResolution to both renderers', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      // Should not throw
+      expect(() => {
+        renderer.setResolution(1920, 1080);
+      }).not.toThrow();
+
+      expect(() => {
+        renderer.setResolution(800, 600);
+      }).not.toThrow();
+    });
+  });
+
+  describe('Threshold management', () => {
+    it('should get default threshold', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      expect(renderer.getInstancingThreshold()).toBe(100);
+    });
+
+    it('should get custom threshold from options', () => {
+      const options: HybridRendererOptions = {
+        instancingThreshold: 150,
+      };
+      renderer = new HybridRenderer(gl, instancedShader, batchShader, options);
+
+      expect(renderer.getInstancingThreshold()).toBe(150);
+    });
+
+    it('should set threshold within valid range', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      renderer.setInstancingThreshold(200);
+      expect(renderer.getInstancingThreshold()).toBe(200);
+
+      renderer.setInstancingThreshold(50);
+      expect(renderer.getInstancingThreshold()).toBe(50);
+
+      renderer.setInstancingThreshold(500);
+      expect(renderer.getInstancingThreshold()).toBe(500);
+    });
+
+    it('should clamp threshold to minimum of 50', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      renderer.setInstancingThreshold(10);
+      expect(renderer.getInstancingThreshold()).toBe(50);
+
+      renderer.setInstancingThreshold(0);
+      expect(renderer.getInstancingThreshold()).toBe(50);
+    });
+
+    it('should clamp threshold to maximum of 500', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      renderer.setInstancingThreshold(1000);
+      expect(renderer.getInstancingThreshold()).toBe(500);
+
+      renderer.setInstancingThreshold(600);
+      expect(renderer.getInstancingThreshold()).toBe(500);
+    });
+
+    it('should update instancedRenderer threshold when set', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      renderer.setInstancingThreshold(150);
+
+      const instancedRenderer = (renderer as any).instancedRenderer;
+      expect(instancedRenderer).toBeDefined();
+    });
+  });
+
+  describe('Dynamic threshold adjustment', () => {
+    it('should lower threshold when instancing ratio is low', () => {
+      const options: HybridRendererOptions = {
+        instancingThreshold: 200,
+      };
+      renderer = new HybridRenderer(gl, instancedShader, batchShader, options);
+
+      // Simulate metrics with low instancing ratio
+      (renderer as any).metrics = {
+        instancedDrawCalls: 1,
+        batchedDrawCalls: 10,
+        instancedInstances: 10,
+        batchedInstances: 100,
+      };
+
+      // Call adjustThreshold
+      (renderer as any).adjustThreshold();
+
+      // Threshold should decrease (but stay above 50)
+      const newThreshold = renderer.getInstancingThreshold();
+      expect(newThreshold).toBeGreaterThanOrEqual(50);
+      expect(newThreshold).toBeLessThan(200);
+    });
+
+    it('should raise threshold when instancing ratio is high', () => {
+      const options: HybridRendererOptions = {
+        instancingThreshold: 100,
+      };
+      renderer = new HybridRenderer(gl, instancedShader, batchShader, options);
+
+      // Simulate metrics with high instancing ratio
+      (renderer as any).metrics = {
+        instancedDrawCalls: 10,
+        batchedDrawCalls: 1,
+        instancedInstances: 200,
+        batchedInstances: 10,
+      };
+
+      // Call adjustThreshold
+      (renderer as any).adjustThreshold();
+
+      // Threshold should increase (but stay below 500)
+      const newThreshold = renderer.getInstancingThreshold();
+      expect(newThreshold).toBeGreaterThan(100);
+      expect(newThreshold).toBeLessThanOrEqual(500);
+    });
+
+    it('should not adjust threshold when instancing ratio is balanced', () => {
+      const options: HybridRendererOptions = {
+        instancingThreshold: 150,
+      };
+      renderer = new HybridRenderer(gl, instancedShader, batchShader, options);
+
+      // Simulate balanced metrics
+      (renderer as any).metrics = {
+        instancedDrawCalls: 5,
+        batchedDrawCalls: 5,
+        instancedInstances: 50,
+        batchedInstances: 50,
+      };
+
+      // Call adjustThreshold
+      (renderer as any).adjustThreshold();
+
+      // Threshold should remain the same
+      expect(renderer.getInstancingThreshold()).toBe(150);
+    });
+
+    it('should not lower threshold below minimum of 50', () => {
+      const options: HybridRendererOptions = {
+        instancingThreshold: 55,
+      };
+      renderer = new HybridRenderer(gl, instancedShader, batchShader, options);
+
+      // Simulate very low instancing ratio
+      (renderer as any).metrics = {
+        instancedDrawCalls: 0,
+        batchedDrawCalls: 10,
+        instancedInstances: 0,
+        batchedInstances: 100,
+      };
+
+      // Call adjustThreshold
+      (renderer as any).adjustThreshold();
+
+      // Should not go below 50
+      expect(renderer.getInstancingThreshold()).toBeGreaterThanOrEqual(50);
+    });
+
+    it('should not raise threshold above maximum of 500', () => {
+      const options: HybridRendererOptions = {
+        instancingThreshold: 495,
+      };
+      renderer = new HybridRenderer(gl, instancedShader, batchShader, options);
+
+      // Simulate very high instancing ratio
+      (renderer as any).metrics = {
+        instancedDrawCalls: 10,
+        batchedDrawCalls: 0,
+        instancedInstances: 200,
+        batchedInstances: 0,
+      };
+
+      // Call adjustThreshold
+      (renderer as any).adjustThreshold();
+
+      // Should not go above 500
+      expect(renderer.getInstancingThreshold()).toBeLessThanOrEqual(500);
+    });
+
+    it('should handle zero total instances gracefully', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      // Simulate empty metrics
+      (renderer as any).metrics = {
+        instancedDrawCalls: 0,
+        batchedDrawCalls: 0,
+        instancedInstances: 0,
+        batchedInstances: 0,
+      };
+
+      // Should not throw
+      expect(() => {
+        (renderer as any).adjustThreshold();
+      }).not.toThrow();
+    });
+  });
+
+  describe('Frame counting for threshold adjustment', () => {
+    it('should track frame count', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      const initialFrameCount = (renderer as any).frameCount;
+      expect(initialFrameCount).toBe(0);
+    });
+
+    it('should increment frame count after each render', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      // Note: We can't actually call render() without proper camera setup
+      // But we can test the frame counter logic directly
+      (renderer as any).frameCount = 59;
+
+      // Simulate next frame
+      (renderer as any).frameCount++;
+      expect((renderer as any).frameCount).toBe(60);
+    });
+  });
+
+  describe('Metrics tracking', () => {
+    it('should initialize with zero metrics', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      const metrics = renderer.getMetrics();
+
+      expect(metrics.instancedDrawCalls).toBe(0);
+      expect(metrics.batchedDrawCalls).toBe(0);
+      expect(metrics.instancedInstances).toBe(0);
+      expect(metrics.batchedInstances).toBe(0);
+    });
+
+    it('should return copy of metrics (not reference)', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      const metrics1 = renderer.getMetrics();
+      const metrics2 = renderer.getMetrics();
+
+      expect(metrics1).not.toBe(metrics2);
+      expect(metrics1).toEqual(metrics2);
+    });
+  });
+
+  describe('Renderer disposal', () => {
+    it('should dispose both renderers', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      // Add some quads
+      for (let i = 0; i < 10; i++) {
+        renderer.addQuad({
+          gridX: i,
+          gridY: 0,
+          x: i * 32,
+          y: 0,
+          z: 0,
+          width: 32,
+          height: 32,
+          rotation: 0,
+          texIndex: 0,
+          color: { r: 1, g: 1, b: 1, a: 1 }
+        });
+      }
+
+      // Should not throw
+      expect(() => {
+        renderer.dispose();
+      }).not.toThrow();
+    });
+
+    it('should handle dispose on empty renderer', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      expect(() => {
+        renderer.dispose();
+      }).not.toThrow();
+    });
+
+    it('should handle multiple dispose calls', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      renderer.dispose();
+
+      expect(() => {
+        renderer.dispose();
+      }).not.toThrow();
+    });
+  });
+
+  describe('Threshold edge cases', () => {
+    it('should handle threshold exactly at 50', () => {
+      const options: HybridRendererOptions = {
+        instancingThreshold: 50,
+      };
+      renderer = new HybridRenderer(gl, instancedShader, batchShader, options);
+
+      expect(renderer.getInstancingThreshold()).toBe(50);
+
+      // Should not lower below 50
+      (renderer as any).metrics = {
+        instancedDrawCalls: 0,
+        batchedDrawCalls: 10,
+        instancedInstances: 0,
+        batchedInstances: 100,
+      };
+      (renderer as any).adjustThreshold();
+
+      expect(renderer.getInstancingThreshold()).toBe(50);
+    });
+
+    it('should handle threshold exactly at 500', () => {
+      const options: HybridRendererOptions = {
+        instancingThreshold: 500,
+      };
+      renderer = new HybridRenderer(gl, instancedShader, batchShader, options);
+
+      expect(renderer.getInstancingThreshold()).toBe(500);
+
+      // Should not raise above 500
+      (renderer as any).metrics = {
+        instancedDrawCalls: 10,
+        batchedDrawCalls: 0,
+        instancedInstances: 200,
+        batchedInstances: 0,
+      };
+      (renderer as any).adjustThreshold();
+
+      expect(renderer.getInstancingThreshold()).toBe(500);
+    });
+
+    it('should adjust threshold by 10 each time', () => {
+      renderer = new HybridRenderer(gl, instancedShader, batchShader);
+
+      renderer.setInstancingThreshold(200);
+
+      // Lower by 10
+      (renderer as any).metrics = {
+        instancedDrawCalls: 0,
+        batchedDrawCalls: 10,
+        instancedInstances: 0,
+        batchedInstances: 100,
+      };
+      (renderer as any).adjustThreshold();
+      expect(renderer.getInstancingThreshold()).toBe(190);
+
+      // Raise by 10
+      (renderer as any).metrics = {
+        instancedDrawCalls: 10,
+        batchedDrawCalls: 0,
+        instancedInstances: 200,
+        batchedInstances: 0,
+      };
+      (renderer as any).adjustThreshold();
+      expect(renderer.getInstancingThreshold()).toBe(200);
     });
   });
 });

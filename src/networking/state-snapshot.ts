@@ -253,18 +253,53 @@ export class StateSnapshot implements EntityStateSnapshot {
     const entities = new Map<string, EntityState>();
     for (let i = 0; i < entityCount; i++) {
       const entityId = reader.readString();
-      const stateData = reader.readBytes(reader.peekUint8()); // Read flags first to get size
-      reader.setOffset(reader.getOffset() - 1); // Go back to read properly
 
-      // Re-read with proper size
-      const stateDataLength = StateSnapshot.estimateEntityStateSize();
-      const actualData = reader.readBytes(stateDataLength);
+      // Calculate entity state size from flags
+      const flags = reader.peekUint8();
+      const stateDataLength = StateSnapshot.calculateEntityStateSizeFromFlags(flags);
 
-      const state = EntitySerializer.deserializeEntityState(actualData);
+      // Read the entity state data
+      const stateData = reader.readBytes(stateDataLength);
+
+      const state = EntitySerializer.deserializeEntityState(stateData);
       entities.set(entityId, state);
     }
 
     return new StateSnapshot(tick, entities, timestamp);
+  }
+
+  /**
+   * Calculate the exact size of an entity state from its flags
+   */
+  private static calculateEntityStateSizeFromFlags(flags: number): number {
+    let size = 1; // Flags byte
+
+    // HAS_POSITION: 3 floats (12 bytes)
+    if (flags & 0x01) {
+      size += 12;
+    }
+
+    // HAS_VELOCITY: 3 floats (12 bytes)
+    if (flags & 0x02) {
+      size += 12;
+    }
+
+    // HAS_ROTATION: 1 float (4 bytes)
+    if (flags & 0x04) {
+      size += 4;
+    }
+
+    // HAS_SPEED: 1 float (4 bytes)
+    if (flags & 0x08) {
+      size += 4;
+    }
+
+    // HAS_IS_MOVING: 1 boolean (1 byte)
+    if (flags & 0x10) {
+      size += 1;
+    }
+
+    return size;
   }
 
   /**

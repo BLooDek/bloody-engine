@@ -71,15 +71,15 @@ interface QuadGroup {
 /**
  * Detect shader type from shader source code
  * Checks for isometric projection patterns
+ * @internal Exported for testing purposes only
  */
-function detectShaderTypeFromSource(shader: Shader): 'isometric' | 'top-down' {
+export function detectShaderTypeFromSource(shader: Shader): 'isometric' | 'top-down' {
   const vertexSource = shader.getVertexSource();
 
-  // Check for isometric projection pattern: (x - y) or (aGridPosition.x - aGridPosition.y)
-  if (
-    vertexSource.includes('(x - y)') ||
-    vertexSource.includes('(aGridPosition.x - aGridPosition.y)')
-  ) {
+  // Check for isometric projection pattern using regex
+  // Matches: x - y, aGridPosition.x - aGridPosition.y, with or without parentheses
+  const isometricPattern = /aGridPosition\.x\s*-\s*aGridPosition\.y|\bx\s*-\s*\by/;
+  if (isometricPattern.test(vertexSource)) {
     return 'isometric';
   }
 
