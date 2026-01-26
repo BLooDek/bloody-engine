@@ -16,6 +16,7 @@ import type { Shader } from "../core/shader";
 import type { Camera } from "./camera";
 import type { Texture } from "../core/texture";
 import { RingBuffer } from "./ring-buffer";
+import { getInstancingMethods } from "../platforms/node/webgl-extensions";
 
 /**
  * Instance data per sprite (matches shader layout)
@@ -71,9 +72,15 @@ export interface InstancedRendererOptions {
  * Uses ring buffers for zero-copy GPU transfers.
  */
 export class InstancedRenderer {
-  private gl: WebGL2RenderingContext;
+  private gl: any; // Accept 'any' for Node.js compatibility
   private shader: Shader;
   private texture: Texture | null = null;
+
+  // Instancing extension methods (for headless-gl compatibility)
+  private instancingMethods: {
+    drawArraysInstanced: Function;
+    vertexAttribDivisor: Function;
+  };
 
   // Geometry buffers (shared quad)
   private positionBuffer!: WebGLBuffer;
@@ -93,7 +100,7 @@ export class InstancedRenderer {
   private autoBatchThreshold: number;
 
   // Projection settings
-  private tileSize: { width: number; height: number };
+  private resolution: { width: number; height: number };
   private zScale: number;
 
   // Metrics
@@ -101,19 +108,21 @@ export class InstancedRenderer {
   private lastFrameInstanceCount: number = 0;
 
   constructor(
-    gl: WebGL2RenderingContext,
+    gl: any,
     shader: Shader,
     options: InstancedRendererOptions = {}
   ) {
-    // Verify WebGL2
-    if (!(gl instanceof WebGL2RenderingContext)) {
-      throw new Error("InstancedRenderer requires WebGL2 context");
+    // Get instancing methods (direct or from extension)
+    const methods = getInstancingMethods(gl);
+    if (!methods) {
+      throw new Error("InstancedRenderer requires WebGL2 context with instancing support (ANGLE_instanced_arrays)");
     }
 
+    this.instancingMethods = methods;
     this.gl = gl;
     this.shader = shader;
     this.maxInstances = options.maxInstances ?? 10000;
-    this.tileSize = options.tileSize ?? { width: 64, height: 32 };
+    this.resolution = { width: 1280, height: 720 }; // Default resolution
     this.zScale = options.zScale ?? 1.0;
     this.autoBatchThreshold = options.autoBatchThreshold ?? 100;
 
@@ -265,8 +274,10 @@ export class InstancedRenderer {
     let totalInstances = 0;
 
     for (const batch of this.batches.values()) {
-      // Skip if under threshold (use regular batch renderer instead)
-      if (batch.instances.length < this.autoBatchThreshold) {
+      // Render all batches (threshold check is done in HybridRenderer)
+      // We still enforce maxInstances as a safety limit
+      if (batch.instances.length > this.maxInstances) {
+        console.warn(`Batch exceeds maxInstances (${batch.instances.length} > ${this.maxInstances}), skipping`);
         continue;
       }
 
@@ -344,11 +355,15 @@ export class InstancedRenderer {
     // Bind instance buffer (use ring buffer directly)
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.instanceBufferWebGL);
 
+    // CRITICAL: Upload data to GPU BEFORE drawing
+    // In fallback mode, this flushes the CPU buffer to GPU
+    this.instanceBuffer.flush();
+
     // Configure instance attributes with divisor
     this.setupInstanceAttributes(region.offset);
 
-    // Draw instanced
-    this.gl.drawArraysInstanced(
+    // Draw instanced (use extension method if available)
+    this.instancingMethods.drawArraysInstanced(
       this.gl.TRIANGLES,
       0,
       6, // 6 vertices per quad
@@ -364,14 +379,12 @@ export class InstancedRenderer {
     const stride = this.instanceStride * 4;
     const baseOffset = offset;
 
-    const glAny = this.gl as any;
-
     // Grid position (vec2)
     const gridAttr = this.shader.getAttributeLocation("aGridPosition");
     if (gridAttr !== -1) {
       this.gl.enableVertexAttribArray(gridAttr);
       this.gl.vertexAttribPointer(gridAttr, 2, this.gl.FLOAT, false, stride, baseOffset);
-      glAny.vertexAttribDivisor(gridAttr, 1); // Advance per instance
+      this.instancingMethods.vertexAttribDivisor(gridAttr, 1); // Advance per instance
     }
 
     // Z position (float)
@@ -379,7 +392,7 @@ export class InstancedRenderer {
     if (zAttr !== -1) {
       this.gl.enableVertexAttribArray(zAttr);
       this.gl.vertexAttribPointer(zAttr, 1, this.gl.FLOAT, false, stride, baseOffset + 2 * 4);
-      glAny.vertexAttribDivisor(zAttr, 1);
+      this.instancingMethods.vertexAttribDivisor(zAttr, 1);
     }
 
     // Color (vec4)
@@ -387,7 +400,7 @@ export class InstancedRenderer {
     if (colorAttr !== -1) {
       this.gl.enableVertexAttribArray(colorAttr);
       this.gl.vertexAttribPointer(colorAttr, 4, this.gl.FLOAT, false, stride, baseOffset + 3 * 4);
-      glAny.vertexAttribDivisor(colorAttr, 1);
+      this.instancingMethods.vertexAttribDivisor(colorAttr, 1);
     }
 
     // Texture index (float)
@@ -395,7 +408,7 @@ export class InstancedRenderer {
     if (texAttr !== -1) {
       this.gl.enableVertexAttribArray(texAttr);
       this.gl.vertexAttribPointer(texAttr, 1, this.gl.FLOAT, false, stride, baseOffset + 7 * 4);
-      glAny.vertexAttribDivisor(texAttr, 1);
+      this.instancingMethods.vertexAttribDivisor(texAttr, 1);
     }
 
     // UV offset (vec2)
@@ -403,7 +416,7 @@ export class InstancedRenderer {
     if (uvOffsetAttr !== -1) {
       this.gl.enableVertexAttribArray(uvOffsetAttr);
       this.gl.vertexAttribPointer(uvOffsetAttr, 2, this.gl.FLOAT, false, stride, baseOffset + 8 * 4);
-      glAny.vertexAttribDivisor(uvOffsetAttr, 1);
+      this.instancingMethods.vertexAttribDivisor(uvOffsetAttr, 1);
     }
 
     // Size (vec2)
@@ -411,7 +424,7 @@ export class InstancedRenderer {
     if (sizeAttr !== -1) {
       this.gl.enableVertexAttribArray(sizeAttr);
       this.gl.vertexAttribPointer(sizeAttr, 2, this.gl.FLOAT, false, stride, baseOffset + 10 * 4);
-      glAny.vertexAttribDivisor(sizeAttr, 1);
+      this.instancingMethods.vertexAttribDivisor(sizeAttr, 1);
     }
   }
 
@@ -419,15 +432,16 @@ export class InstancedRenderer {
    * Set shader uniforms
    */
   private setUniforms(camera: Camera): void {
-    const matrixUniform = this.shader.getUniformLocation("uMatrix");
-    if (matrixUniform !== null) {
-      const matrix = camera.getViewMatrix();
-      this.gl.uniformMatrix4fv(matrixUniform, false, matrix);
+    // V5 uses uCamera (vec3: x, y, zoom) and uResolution instead of uMatrix
+    const cameraUniform = this.shader.getUniformLocation("uCamera");
+    if (cameraUniform !== null) {
+      this.gl.uniform3f(cameraUniform, camera.x, camera.y, camera.zoom);
     }
 
-    const tileSizeUniform = this.shader.getUniformLocation("uTileSize");
-    if (tileSizeUniform !== null) {
-      this.gl.uniform2f(tileSizeUniform, this.tileSize.width, this.tileSize.height);
+    // Resolution for NDC conversion (set via setResolution method)
+    const resolutionUniform = this.shader.getUniformLocation("uResolution");
+    if (resolutionUniform !== null) {
+      this.gl.uniform2f(resolutionUniform, this.resolution.width, this.resolution.height);
     }
 
     const zScaleUniform = this.shader.getUniformLocation("uZScale");
@@ -441,6 +455,16 @@ export class InstancedRenderer {
    */
   setDepthTestEnabled(enabled: boolean): void {
     this.depthTestEnabled = enabled;
+  }
+
+  /**
+   * Update the resolution for NDC conversion
+   * Call this when the framebuffer size changes
+   * @param width New framebuffer width
+   * @param height New framebuffer height
+   */
+  setResolution(width: number, height: number): void {
+    this.resolution = { width, height };
   }
 
   /**

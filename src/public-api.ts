@@ -113,7 +113,14 @@ export type {
 } from "./core/resource-pipeline";
 
 // Scene system
-export { SHADERS_V1, SHADERS_V2, SHADERS_V3, SHADERS_V4 } from "./scene/scene";
+export {
+  SHADERS_V1,
+  SHADERS_V2,
+  SHADERS_V3,
+  SHADERS_V4,
+  SHADERS_V5,  // Top-down instanced rendering
+  SHADERS_V6,  // Top-down batch rendering
+} from "./scene/scene";
 export { SHADERS as SHADERS_V1_also } from "./scene/scene";
 export type { VisualizationEntity } from "./scene/scene";
 

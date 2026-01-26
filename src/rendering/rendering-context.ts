@@ -61,8 +61,9 @@ export interface RenderingContext {
 
   /**
    * Get WebGL2 context (throws if not WebGL2)
+   * Returns 'any' to support Node.js environments where WebGL2RenderingContext type may not be defined
    */
-  getWebGL2Context(): WebGL2RenderingContext;
+  getWebGL2Context(): any;
 }
 
 /**

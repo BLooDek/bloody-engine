@@ -7,6 +7,8 @@ export class Shader {
   private gl: WebGLRenderingContext;
   private vertexShader: WebGLShader;
   private fragmentShader: WebGLShader;
+  private vertexSource: string;
+  private fragmentSource: string;
 
   /**
    * Create a new shader program
@@ -22,6 +24,8 @@ export class Shader {
     isBrowser: boolean,
   ) {
     this.gl = gl;
+    this.vertexSource = vertexSource;
+    this.fragmentSource = fragmentSource;
 
     // Inject precision headers based on environment
     const processedVertexSource = this.injectPrecisionHeader(
@@ -166,6 +170,21 @@ precision highp float;
    */
   use(): void {
     this.gl.useProgram(this.program);
+  }
+
+  /**
+   * Get the original vertex shader source code
+   * Useful for shader analysis and type detection
+   */
+  getVertexSource(): string {
+    return this.vertexSource;
+  }
+
+  /**
+   * Get the original fragment shader source code
+   */
+  getFragmentSource(): string {
+    return this.fragmentSource;
   }
 
   /**
