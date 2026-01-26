@@ -63,6 +63,14 @@ export { VertexBuffer, IndexBuffer } from "./core/buffer";
 export { BatchRenderer, SpriteBatchRenderer, GPUBasedSpriteBatchRenderer } from "./rendering/batch-renderer";
 export type { QuadInstance, SpriteQuadInstance } from "./rendering/batch-renderer";
 
+// Instanced rendering (WebGL2)
+export { InstancedRenderer } from "./rendering/instanced-renderer";
+export type { InstanceData } from "./rendering/instanced-renderer";
+export { HybridRenderer } from "./rendering/hybrid-renderer";
+export type { HybridRendererOptions, RenderMetrics } from "./rendering/hybrid-renderer";
+export { RingBuffer } from "./rendering/ring-buffer";
+export type { RingBufferOptions, RingBufferRegion } from "./rendering/ring-buffer";
+
 // Vertex structures
 export type { SpriteVertex } from "./rendering/vertex";
 
@@ -105,6 +113,8 @@ export type {
 } from "./core/resource-pipeline";
 
 // Scene system
+export { SHADERS_V1, SHADERS_V2, SHADERS_V3, SHADERS_V4 } from "./scene/scene";
+export { SHADERS as SHADERS_V1_also } from "./scene/scene";
 export type { VisualizationEntity } from "./scene/scene";
 
 // Input system (Command Queue Pattern)

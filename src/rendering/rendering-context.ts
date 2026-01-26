@@ -48,6 +48,21 @@ export interface RenderingContext {
    * Cleanup and release resources
    */
   dispose(): void;
+
+  /**
+   * Check if WebGL2 context is available
+   */
+  isWebGL2(): boolean;
+
+  /**
+   * Check if instancing is supported
+   */
+  supportsInstancing(): boolean;
+
+  /**
+   * Get WebGL2 context (throws if not WebGL2)
+   */
+  getWebGL2Context(): WebGL2RenderingContext;
 }
 
 /**

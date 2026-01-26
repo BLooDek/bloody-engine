@@ -66,6 +66,29 @@ export class NodeRenderingContext implements RenderingContext {
     this.glContext.flush();
   }
 
+  isWebGL2(): boolean {
+    // headless-gl always returns WebGL2RenderingContext
+    return this.glContext instanceof WebGL2RenderingContext;
+  }
+
+  supportsInstancing(): boolean {
+    if (!this.isWebGL2()) {
+      return false;
+    }
+
+    // Check for instanced arrays extension (should be in WebGL2)
+    const gl2 = this.glContext as WebGL2RenderingContext;
+    return gl2.drawArraysInstanced !== undefined &&
+           (gl2 as any).vertexAttribDivisor !== undefined;
+  }
+
+  getWebGL2Context(): WebGL2RenderingContext {
+    if (!this.isWebGL2()) {
+      throw new Error("WebGL2 context not available");
+    }
+    return this.glContext as WebGL2RenderingContext;
+  }
+
   /**
    * Read the current framebuffer contents as RGBA pixel data
    * Used for capturing frames for display or saving

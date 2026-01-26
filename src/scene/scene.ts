@@ -319,6 +319,100 @@ void main() {
 `,
 };
 
+/**
+ * SHADERS_V4 - Instanced Rendering with GPU Streaming
+ *
+ * This version adds instanced rendering support for efficient rendering
+ * of many identical meshes with different per-instance attributes.
+ *
+ * Static Attributes (per-vertex, shared across all instances):
+ * - aPosition: Local quad position (x, y) in [-0.5, 0.5]
+ * - aTexCoord: Texture coordinates (u, v)
+ *
+ * Instanced Attributes (per-instance, advance once per instance):
+ * - aGridPosition: Grid position (x, y)
+ * - aZPosition: Z height
+ * - aColor: Color tint (r, g, b, a)
+ * - aTexIndex: Texture atlas index
+ * - aUVOffset: UV offset for sprite sheets
+ * - aSize: Sprite size (width, height)
+ *
+ * Uniforms:
+ * - uMatrix: View matrix (camera transform)
+ * - uTileSize: Size for isometric projection
+ * - uZScale: Z height scale factor
+ */
+export const SHADERS_V4 = {
+  vertex: `
+// Static attributes (shared across all instances)
+attribute vec2 aPosition;
+attribute vec2 aTexCoord;
+
+// Instanced attributes (one per instance)
+attribute vec2 aGridPosition;
+attribute float aZPosition;
+attribute vec4 aColor;
+attribute float aTexIndex;
+attribute vec2 aUVOffset;
+attribute vec2 aSize;
+
+// Varyings to fragment shader
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+// Uniforms
+uniform mat4 uMatrix;
+uniform vec2 uTileSize;
+uniform float uZScale;
+
+void main() {
+  // Calculate local quad position with size
+  vec2 localPos = aPosition * aSize;
+
+  // Isometric projection: grid (x, y) -> screen (x, y)
+  vec2 isoScreen = vec2(
+    (aGridPosition.x - aGridPosition.y) * uTileSize.x * 0.5,
+    (aGridPosition.x + aGridPosition.y) * uTileSize.y * 0.5
+  );
+
+  // Combine isometric screen position with local offset
+  vec2 worldPos = isoScreen + localPos;
+
+  // Subtract z-height from y position
+  worldPos.y -= aZPosition * uZScale;
+
+  // Apply camera transform
+  vec4 clipPos = uMatrix * vec4(worldPos, aZPosition * 0.001, 1.0);
+
+  gl_Position = clipPos;
+
+  // Pass texture coordinates with offset
+  vTexCoord = aTexCoord + aUVOffset;
+  vColor = aColor;
+  vTexIndex = aTexIndex;
+}
+`,
+
+  fragment: `
+precision mediump float;
+
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+uniform sampler2D uTexture;
+
+void main() {
+  // Sample texture
+  vec4 texColor = texture2D(uTexture, vTexCoord);
+
+  // Apply vertex color tint
+  gl_FragColor = texColor * vColor;
+}
+`,
+};
+
 // Texture config
 export const TEXTURE_CONFIG = {
   size: 256,

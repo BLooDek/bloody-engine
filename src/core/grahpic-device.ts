@@ -102,4 +102,26 @@ export class GraphicsDevice {
       this.context.isBrowser,
     );
   }
+
+  /**
+   * Check if WebGL2 is available
+   */
+  isWebGL2(): boolean {
+    return this.context.isWebGL2();
+  }
+
+  /**
+   * Check if instancing is supported
+   */
+  supportsInstancing(): boolean {
+    return this.context.supportsInstancing();
+  }
+
+  /**
+   * Get WebGL2 context (for advanced features)
+   * Throws if WebGL2 is not available
+   */
+  getWebGL2Context(): WebGL2RenderingContext {
+    return this.context.getWebGL2Context();
+  }
 }
