@@ -229,6 +229,219 @@ testResult(
 );
 
 // ============================================================================
+// Test Suite: Screen-to-Grid with Height
+// ============================================================================
+
+console.log("\n📏 Screen-to-Grid with Height Tests:");
+console.log("=====================================");
+
+// Test 17: screenToGrid with non-zero zheight
+const screenWithHeight: ScreenCoord = { xscreen: 0, yscreen: -10 };
+const gridWithHeight = screenToGrid(screenWithHeight, testConfig, 10);
+testResult(
+  "Screen (0,-10) with zheight=10 inverts correctly",
+  almostEqual(gridWithHeight.xgrid, 0) &&
+    almostEqual(gridWithHeight.ygrid, 0) &&
+    almostEqual(gridWithHeight.zheight, 10),
+  `Got (${gridWithHeight.xgrid}, ${gridWithHeight.ygrid}, ${gridWithHeight.zheight})`,
+);
+
+// Test 18: screenToGrid with height offset adjustment
+const elevatedGrid: GridCoord = { xgrid: 1, ygrid: 1, zheight: 8 };
+const elevatedScreenWithHeight = gridToScreen(elevatedGrid, testConfig);
+const reconstructedElevated = screenToGrid(
+  elevatedScreenWithHeight,
+  testConfig,
+  elevatedGrid.zheight,
+);
+testResult(
+  "Round-trip with elevation preserves coordinates",
+  almostEqual(reconstructedElevated.xgrid, elevatedGrid.xgrid) &&
+    almostEqual(reconstructedElevated.ygrid, elevatedGrid.ygrid) &&
+    almostEqual(reconstructedElevated.zheight, elevatedGrid.zheight),
+  `Original (${elevatedGrid.xgrid}, ${elevatedGrid.ygrid}, ${elevatedGrid.zheight}), ` +
+    `reconstructed (${reconstructedElevated.xgrid}, ${reconstructedElevated.ygrid}, ${reconstructedElevated.zheight})`,
+);
+
+// Test 19: Multiple height levels round-trip
+let heightTestPassed = true;
+for (let h = 0; h <= 20; h += 5) {
+  const testGrid: GridCoord = { xgrid: 2, ygrid: 3, zheight: h };
+  const testScreen = gridToScreen(testGrid, testConfig);
+  const testReconstructed = screenToGrid(testScreen, testConfig, h);
+  if (
+    !almostEqual(testReconstructed.xgrid, testGrid.xgrid) ||
+    !almostEqual(testReconstructed.ygrid, testGrid.ygrid) ||
+    !almostEqual(testReconstructed.zheight, testGrid.zheight)
+  ) {
+    heightTestPassed = false;
+  }
+}
+testResult("Multiple height levels round-trip correctly", heightTestPassed);
+
+// ============================================================================
+// Test Suite: Aspect Ratio and Viewport Transformations
+// ============================================================================
+
+console.log("\n🖼️  Aspect Ratio and Viewport Tests:");
+console.log("======================================");
+
+// Test 20: Square aspect ratio (1:1)
+const squareConfig = new ProjectionConfig(32, 32, 1.0);
+const squareGrid: GridCoord = { xgrid: 1, ygrid: 0, zheight: 0 };
+const squareScreen = gridToScreen(squareGrid, squareConfig);
+testResult(
+  "Square aspect ratio (32x32) projects correctly",
+  almostEqual(squareScreen.xscreen, 16) && almostEqual(squareScreen.yscreen, 16),
+  `Got (${squareScreen.xscreen}, ${squareScreen.yscreen})`,
+);
+
+// Test 21: Wide aspect ratio (2:1)
+const wideConfig = new ProjectionConfig(128, 32, 1.0);
+const wideGrid: GridCoord = { xgrid: 1, ygrid: 0, zheight: 0 };
+const wideScreen = gridToScreen(wideGrid, wideConfig);
+testResult(
+  "Wide aspect ratio (128x32) projects correctly",
+  almostEqual(wideScreen.xscreen, 64) && almostEqual(wideScreen.yscreen, 16),
+  `Got (${wideScreen.xscreen}, ${wideScreen.yscreen})`,
+);
+
+// Test 22: Tall aspect ratio (1:2)
+const tallConfig = new ProjectionConfig(32, 64, 1.0);
+const tallGrid: GridCoord = { xgrid: 1, ygrid: 0, zheight: 0 };
+const tallScreen = gridToScreen(tallGrid, tallConfig);
+testResult(
+  "Tall aspect ratio (32x64) projects correctly",
+  almostEqual(tallScreen.xscreen, 16) && almostEqual(tallScreen.yscreen, 32),
+  `Got (${tallScreen.xscreen}, ${tallScreen.yscreen})`,
+);
+
+// Test 23: Viewport transformation with different configurations
+const aspectConfigs = [
+  new ProjectionConfig(64, 32, 1.0),
+  new ProjectionConfig(128, 64, 1.0),
+  new ProjectionConfig(96, 48, 1.0),
+];
+let aspectRatioTestPassed = true;
+for (const config of aspectConfigs) {
+  const testGrid: GridCoord = { xgrid: 3, ygrid: 2, zheight: 5 };
+  const testScreen = gridToScreen(testGrid, config);
+  const testReconstructed = screenToGrid(testScreen, config, testGrid.zheight);
+  if (
+    !almostEqual(testReconstructed.xgrid, testGrid.xgrid) ||
+    !almostEqual(testReconstructed.ygrid, testGrid.ygrid)
+  ) {
+    aspectRatioTestPassed = false;
+  }
+}
+testResult(
+  "Round-trip works across different aspect ratios",
+  aspectRatioTestPassed,
+);
+
+// ============================================================================
+// Test Suite: Grid Coordinate Validation Edge Cases
+// ============================================================================
+
+console.log("\n✅ Grid Coordinate Validation Edge Cases:");
+console.log("==========================================");
+
+// Test 24: Negative zheight fails validation
+const negativeZ: GridCoord = { xgrid: 50, ygrid: 50, zheight: -1 };
+testResult(
+  "Negative zheight fails validation",
+  !isGridCoordValid(negativeZ, 100),
+  `zheight=${negativeZ.zheight}`,
+);
+
+// Test 25: Zero zheight passes validation
+const zeroZ: GridCoord = { xgrid: 50, ygrid: 50, zheight: 0 };
+testResult("Zero zheight passes validation", isGridCoordValid(zeroZ, 100));
+
+// Test 26: Boundary values - exact max size
+const boundaryMax: GridCoord = { xgrid: 99, ygrid: 99, zheight: 0 };
+testResult(
+  "Boundary at max size-1 passes validation",
+  isGridCoordValid(boundaryMax, 100),
+  `Coord (${boundaryMax.xgrid}, ${boundaryMax.ygrid})`,
+);
+
+// Test 27: Boundary values - exactly at max
+const atMax: GridCoord = { xgrid: 100, ygrid: 50, zheight: 0 };
+testResult(
+  "Coordinate at max size fails validation",
+  !isGridCoordValid(atMax, 100),
+  `xgrid=${atMax.xgrid}, max=100`,
+);
+
+// Test 28: Both xgrid and ygrid at boundaries
+const atYMax: GridCoord = { xgrid: 50, ygrid: 100, zheight: 0 };
+testResult(
+  "ygrid at max size fails validation",
+  !isGridCoordValid(atYMax, 100),
+  `ygrid=${atYMax.ygrid}, max=100`,
+);
+
+// Test 29: Large positive zheight
+const largeZ: GridCoord = { xgrid: 50, ygrid: 50, zheight: 1000 };
+testResult(
+  "Large positive zheight passes validation",
+  isGridCoordValid(largeZ, 100),
+  `zheight=${largeZ.zheight}`,
+);
+
+// Test 30: Default maxGridSize behavior
+const defaultMaxValid: GridCoord = { xgrid: 500, ygrid: 500, zheight: 0 };
+testResult(
+  "Default maxGridSize (1000) validates correctly",
+  isGridCoordValid(defaultMaxValid),
+  `Coord (${defaultMaxValid.xgrid}, ${defaultMaxValid.ygrid})`,
+);
+
+// Test 31: Exceeding default maxGridSize
+const defaultMaxInvalid: GridCoord = { xgrid: 1000, ygrid: 500, zheight: 0 };
+testResult(
+  "Coordinate exceeding default maxGridSize fails",
+  !isGridCoordValid(defaultMaxInvalid),
+  `xgrid=${defaultMaxInvalid.xgrid}, default max=1000`,
+);
+
+// ============================================================================
+// Test Suite: Cell Center Offset with Different Configurations
+// ============================================================================
+
+console.log("\n🎯 Cell Center Offset Tests:");
+console.log("==============================");
+
+// Test 32: Cell center with standard config
+const standardCenter = getCellCenterOffset(testConfig);
+testResult(
+  "Standard config cell center offset",
+  almostEqual(standardCenter.xscreen, 0) &&
+    almostEqual(standardCenter.yscreen, 16),
+  `Got (${standardCenter.xscreen}, ${standardCenter.yscreen})`,
+);
+
+// Test 33: Cell center scales with tile height
+const tallTileConfig = new ProjectionConfig(64, 48, 1.0);
+const tallCenter = getCellCenterOffset(tallTileConfig);
+testResult(
+  "Cell center offset scales with tile height",
+  almostEqual(tallCenter.xscreen, 0) &&
+    almostEqual(tallCenter.yscreen, tallTileConfig.tileHeight / 2),
+  `Expected yscreen=${tallTileConfig.tileHeight / 2}, got ${tallCenter.yscreen}`,
+);
+
+// Test 34: Cell center independent of tile width
+const wideTileConfig = new ProjectionConfig(128, 32, 1.0);
+const wideCenter = getCellCenterOffset(wideTileConfig);
+testResult(
+  "Cell center yscreen independent of tile width",
+  almostEqual(wideCenter.yscreen, 16) && almostEqual(wideCenter.xscreen, 0),
+  `Got (${wideCenter.xscreen}, ${wideCenter.yscreen})`,
+);
+
+// ============================================================================
 // Summary
 // ============================================================================
 
