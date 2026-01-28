@@ -120,8 +120,9 @@ export class GraphicsDevice {
   /**
    * Get WebGL2 context (for advanced features)
    * Throws if WebGL2 is not available
+   * Returns 'any' to support Node.js environments where WebGL2RenderingContext type may not be defined
    */
-  getWebGL2Context(): WebGL2RenderingContext {
+  getWebGL2Context(): any {
     return this.context.getWebGL2Context();
   }
 }

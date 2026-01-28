@@ -15,6 +15,7 @@ import type { Texture } from "../core/texture";
 import type { Camera } from "./camera";
 import { DepthSorter } from "./spatial-hash";
 import { Matrix4 } from "./camera";
+import { getInstancingMethods } from "../platforms/node/webgl-extensions";
 
 /**
  * V1 Quad instance data (for backward compatibility)
@@ -783,7 +784,12 @@ export class GPUBasedSpriteBatchRenderer {
     this.maxQuads = maxQuads;
     this.tileSize = tileSize;
     this.zScale = zScale;
-    this.resolution = { width: gl.canvas.width, height: gl.canvas.height };
+    // Get resolution from canvas (browser) or drawingBuffer (headless-gl)
+    const glAny = gl as any;
+    this.resolution = {
+      width: glAny.canvas?.width || glAny.drawingBufferWidth || 800,
+      height: glAny.canvas?.height || glAny.drawingBufferHeight || 600
+    };
     this.depthSorter = new DepthSorter({ cellSize: spatialCellSize });
 
     // Allocate vertex data buffer
@@ -906,7 +912,7 @@ export class GPUBasedSpriteBatchRenderer {
         [halfW, -halfH], // bottom-right
         [halfW, halfH], // top-right
         [halfW, halfH], // top-right (duplicate)
-        [-halfH, halfH], // top-left
+        [-halfW, halfH], // top-left
         [-halfW, -halfH], // bottom-left (duplicate)
       ];
 
@@ -963,6 +969,16 @@ export class GPUBasedSpriteBatchRenderer {
   }
 
   /**
+   * Update the resolution for NDC conversion
+   * Call this when the framebuffer size changes (e.g., window resize)
+   * @param width New framebuffer width
+   * @param height New framebuffer height
+   */
+  setResolution(width: number, height: number): void {
+    this.resolution = { width, height };
+  }
+
+  /**
    * Render the batch with GPU-based transformation
    * @param camera Camera for view transform
    */
@@ -1015,6 +1031,11 @@ export class GPUBasedSpriteBatchRenderer {
           stride,
           0,
         );
+        // CRITICAL: Reset divisor to 0 (per-vertex) when switching from instanced renderer
+        const instancing = getInstancingMethods(this.gl);
+        if (instancing && instancing.vertexAttribDivisor) {
+          instancing.vertexAttribDivisor(attrs.gridPosition, 0);
+        }
       }
 
       // Z position (float)
@@ -1028,6 +1049,11 @@ export class GPUBasedSpriteBatchRenderer {
           stride,
           2 * 4,
         );
+        // CRITICAL: Reset divisor to 0 when switching from instanced renderer
+        const instancing = getInstancingMethods(this.gl);
+        if (instancing && instancing.vertexAttribDivisor) {
+          instancing.vertexAttribDivisor(attrs.zPosition, 0);
+        }
       }
 
       // Local offset (vec2)
@@ -1041,6 +1067,11 @@ export class GPUBasedSpriteBatchRenderer {
           stride,
           3 * 4,
         );
+        // CRITICAL: Reset divisor to 0 when switching from instanced renderer
+        const instancing = getInstancingMethods(this.gl);
+        if (instancing && instancing.vertexAttribDivisor) {
+          instancing.vertexAttribDivisor(attrs.localOffset, 0);
+        }
       }
 
       // Texture coordinates (vec2)
@@ -1054,6 +1085,11 @@ export class GPUBasedSpriteBatchRenderer {
           stride,
           5 * 4,
         );
+        // CRITICAL: Reset divisor to 0 when switching from instanced renderer
+        const instancing = getInstancingMethods(this.gl);
+        if (instancing && instancing.vertexAttribDivisor) {
+          instancing.vertexAttribDivisor(attrs.texCoord, 0);
+        }
       }
 
       // Color (vec4)
@@ -1067,6 +1103,11 @@ export class GPUBasedSpriteBatchRenderer {
           stride,
           7 * 4,
         );
+        // CRITICAL: Reset divisor to 0 when switching from instanced renderer
+        const instancing = getInstancingMethods(this.gl);
+        if (instancing && instancing.vertexAttribDivisor) {
+          instancing.vertexAttribDivisor(attrs.color, 0);
+        }
       }
 
       // Texture index (float)
@@ -1080,6 +1121,11 @@ export class GPUBasedSpriteBatchRenderer {
           stride,
           11 * 4,
         );
+        // CRITICAL: Reset divisor to 0 when switching from instanced renderer
+        const instancing = getInstancingMethods(this.gl);
+        if (instancing && instancing.vertexAttribDivisor) {
+          instancing.vertexAttribDivisor(attrs.texIndex, 0);
+        }
       }
 
       // Bind texture if available

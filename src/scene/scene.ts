@@ -413,6 +413,211 @@ void main() {
 `,
 };
 
+/**
+ * SHADERS_V6 - GPU-Based Top-Down 2D Transformation
+ *
+ * This is a non-isometric variant of V3 for standard top-down 2D rendering.
+ * The vertex shader receives world/grid coordinates and applies camera transform.
+ *
+ * Attributes:
+ * - aGridPosition: World/Grid position (x, y) - NOT transformed isometrically
+ * - aZPosition: Z depth (for depth sorting/layering)
+ * - aLocalOffset: Local quad offset (corner positions)
+ * - aTexCoord: Texture coordinates (u, v)
+ * - aColor: Color tint (r, g, b, a)
+ * - aTexIndex: Texture atlas index
+ *
+ * Uniforms:
+ * - uTileSize: NOT USED in top-down (kept for compatibility)
+ * - uCamera: Camera position (x, y) and zoom
+ * - uRotation: Rotation angle in radians
+ * - uQuadSize: Size of the quad (width, height)
+ * - uZScale: Z depth scale factor
+ * - uResolution: Screen resolution for NDC conversion
+ */
+export const SHADERS_V6 = {
+  vertex: `
+attribute vec2 aGridPosition;
+attribute float aZPosition;
+attribute vec2 aLocalOffset;
+attribute vec2 aTexCoord;
+attribute vec4 aColor;
+attribute float aTexIndex;
+
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+uniform vec2 uTileSize;      // Kept for API compatibility, not used in top-down
+uniform vec3 uCamera;        // x, y, zoom
+uniform float uRotation;
+uniform vec2 uQuadSize;
+uniform float uZScale;
+uniform vec2 uResolution;
+
+void main() {
+  // Apply rotation to local offset
+  float cosR = cos(uRotation);
+  float sinR = sin(uRotation);
+  vec2 rotatedOffset = vec2(
+    aLocalOffset.x * cosR - aLocalOffset.y * sinR,
+    aLocalOffset.x * sinR + aLocalOffset.y * cosR
+  ) * uQuadSize;
+
+  // TOP-DOWN: Use grid position directly as world position
+  // NO isometric projection - simple 2D top-down view
+  vec2 worldPos = aGridPosition + rotatedOffset;
+
+  // Z is used for depth sorting only, not visual height
+  float depth = aZPosition * uZScale;
+
+  // Apply camera transform
+  // Translation: subtract camera position
+  vec2 cameraPos = worldPos - uCamera.xy;
+
+  // Scale by zoom (zoom around camera center)
+  vec2 finalPos = cameraPos * uCamera.z;
+
+  // Convert to NDC (Normalized Device Coordinates)
+  // Center is (0, 0), range is [-1, 1]
+  vec2 ndc = finalPos / (uResolution * 0.5);
+
+  gl_Position = vec4(ndc, depth * 0.001, 1.0);
+
+  // Pass through to fragment shader
+  vTexCoord = aTexCoord;
+  vColor = aColor;
+  vTexIndex = aTexIndex;
+}
+`,
+
+  fragment: `
+precision mediump float;
+
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+uniform sampler2D uTexture;
+
+void main() {
+  // Sample texture
+  vec4 texColor = texture2D(uTexture, vTexCoord);
+
+  // Apply vertex color tint
+  gl_FragColor = texColor * vColor;
+}
+`,
+};
+
+/**
+ * SHADERS_V5 - Instanced Rendering (Top-Down Orthographic)
+ *
+ * This is a non-isometric variant of V4 for standard top-down 2D rendering.
+ * Removes the isometric projection and uses direct grid/world coordinates.
+ *
+ * Static Attributes (per-vertex, shared across all instances):
+ * - aPosition: Local quad position (x, y) in [-0.5, 0.5]
+ * - aTexCoord: Texture coordinates (u, v)
+ *
+ * Instanced Attributes (per-instance, advances once per instance):
+ * - aGridPosition: World/Grid position (x, y) - NOT transformed isometrically
+ * - aZPosition: Z depth (for depth sorting/layering, not visual height)
+ * - aColor: Color tint (r, g, b, a)
+ * - aTexIndex: Texture atlas index
+ * - aUVOffset: UV offset for sprite sheets
+ * - aSize: Sprite size (width, height)
+ *
+ * Uniforms:
+ * - uCamera: Camera position (x, y, zoom)
+ * - uResolution: Framebuffer size (width, height) for NDC conversion
+ * - uZScale: Z depth scale factor
+ */
+export const SHADERS_V5 = {
+  vertex: `
+// Static attributes (shared across all instances)
+attribute vec2 aPosition;
+attribute vec2 aTexCoord;
+
+// Instanced attributes (one per instance)
+attribute vec2 aGridPosition;
+attribute float aZPosition;
+attribute vec4 aColor;
+attribute float aTexIndex;
+attribute vec2 aUVOffset;
+attribute vec2 aSize;
+
+// Varyings to fragment shader
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+// Uniforms
+uniform vec3 uCamera;      // x, y, zoom
+uniform vec2 uResolution;  // width, height
+uniform float uZScale;
+uniform float uRotation;   // Rotation angle in radians
+uniform vec2 uQuadSize;    // Additional quad size multiplier
+
+void main() {
+  // Calculate local quad position with size
+  vec2 localPos = aPosition * aSize;
+
+  // Apply rotation if enabled (matches V6 behavior)
+  float cosR = cos(uRotation);
+  float sinR = sin(uRotation);
+  vec2 rotatedOffset = vec2(
+    localPos.x * cosR - localPos.y * sinR,
+    localPos.x * sinR + localPos.y * cosR
+  ) * uQuadSize;
+
+  // TOP-DOWN: Use grid position directly as world position
+  // NO isometric projection - simple 2D top-down view
+  vec2 worldPos = aGridPosition + rotatedOffset;
+
+  // Z is used for depth sorting (lower values = background, higher = foreground)
+  // Not subtracted from Y since this is top-down, not isometric
+  float depth = aZPosition * uZScale;
+
+  // Apply camera transform (same as V6 batch shader)
+  // Translation: subtract camera position
+  vec2 cameraPos = worldPos - uCamera.xy;
+
+  // Scale by zoom (zoom around camera center)
+  vec2 finalPos = cameraPos * uCamera.z;
+
+  // Convert to NDC (Normalized Device Coordinates)
+  // Center is (0, 0), range is [-1, 1]
+  vec2 ndc = finalPos / (uResolution * 0.5);
+
+  gl_Position = vec4(ndc, depth * 0.001, 1.0);
+
+  // Pass texture coordinates with offset
+  vTexCoord = aTexCoord + aUVOffset;
+  vColor = aColor;
+  vTexIndex = aTexIndex;
+}
+`,
+
+  fragment: `
+precision mediump float;
+
+varying vec2 vTexCoord;
+varying vec4 vColor;
+varying float vTexIndex;
+
+uniform sampler2D uTexture;
+
+void main() {
+  // Sample texture
+  vec4 texColor = texture2D(uTexture, vTexCoord);
+
+  // Apply vertex color tint
+  gl_FragColor = texColor * vColor;
+}
+`,
+};
+
 // Texture config
 export const TEXTURE_CONFIG = {
   size: 256,

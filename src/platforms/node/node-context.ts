@@ -67,26 +67,47 @@ export class NodeRenderingContext implements RenderingContext {
   }
 
   isWebGL2(): boolean {
-    // headless-gl always returns WebGL2RenderingContext
-    return this.glContext instanceof WebGL2RenderingContext;
+    // headless-gl (gl package) provides WebGL2 features via extensions
+    const glAny = this.glContext as any;
+
+    // Check for WEBGL_draw_buffers extension (WebGL2 feature)
+    const hasWebGL2Features = glAny.drawBuffers !== undefined &&
+           glAny.getBufferSubData !== undefined;
+
+    // If not available directly, check for extension
+    if (!hasWebGL2Features && glAny.getSupportedExtensions) {
+      const extensions = glAny.getSupportedExtensions();
+      return extensions.includes('WEBGL_draw_buffers');
+    }
+
+    return hasWebGL2Features;
   }
 
   supportsInstancing(): boolean {
-    if (!this.isWebGL2()) {
-      return false;
+    // Check for instanced arrays (available via ANGLE_instanced_arrays extension)
+    const glAny = this.glContext as any;
+
+    // Check direct methods first
+    const hasDirectMethods = glAny.drawArraysInstanced !== undefined &&
+           glAny.vertexAttribDivisor !== undefined;
+
+    if (hasDirectMethods) {
+      return true;
     }
 
-    // Check for instanced arrays extension (should be in WebGL2)
-    const gl2 = this.glContext as WebGL2RenderingContext;
-    return gl2.drawArraysInstanced !== undefined &&
-           (gl2 as any).vertexAttribDivisor !== undefined;
+    // Check for ANGLE_instanced_arrays extension
+    if (glAny.getSupportedExtensions) {
+      const extensions = glAny.getSupportedExtensions();
+      return extensions.includes('ANGLE_instanced_arrays');
+    }
+
+    return false;
   }
 
-  getWebGL2Context(): WebGL2RenderingContext {
-    if (!this.isWebGL2()) {
-      throw new Error("WebGL2 context not available");
-    }
-    return this.glContext as WebGL2RenderingContext;
+  getWebGL2Context(): any {
+    // Return the context as 'any' to avoid WebGL2RenderingContext type issues in Node.js
+    // headless-gl provides WebGL2-compatible context
+    return this.glContext;
   }
 
   /**

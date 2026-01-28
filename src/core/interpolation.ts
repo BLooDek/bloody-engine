@@ -54,9 +54,17 @@ export function lerpVec3(
  * @returns Interpolated angle
  */
 export function lerpAngle(a: number, b: number, t: number): number {
-  const diff = b - a;
-  const adjustedDiff = ((diff + Math.PI) % (2 * Math.PI)) - Math.PI;
-  return a + adjustedDiff * t;
+  let diff = b - a;
+
+  // Normalize to -PI to +PI range
+  while (diff > Math.PI) {
+    diff -= 2 * Math.PI;
+  }
+  while (diff < -Math.PI) {
+    diff += 2 * Math.PI;
+  }
+
+  return a + diff * t;
 }
 
 /**

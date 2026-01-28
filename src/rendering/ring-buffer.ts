@@ -32,8 +32,8 @@ export interface RingBufferRegion {
 export interface RingBufferOptions {
   /** Buffer size in bytes (should be multiple of frame size * 3) */
   size: number;
-  /** WebGL2 rendering context */
-  gl: WebGL2RenderingContext;
+  /** WebGL2 rendering context (accepts 'any' for Node.js compatibility) */
+  gl: any;
   /** Usage hint (DYNAMIC_DRAW for frequent updates) */
   usage?: number;
   /** Enable triple buffering (default true) */
@@ -54,9 +54,11 @@ interface PendingFrame {
  *
  * Circular buffer with persistent mapping for efficient GPU streaming.
  * Uses triple buffering to avoid CPU-GPU synchronization points.
+ *
+ * Falls back to regular buffer updates if persistent mapping is not available.
  */
 export class RingBuffer {
-  private gl: WebGL2RenderingContext;
+  private gl: any; // Accept 'any' for Node.js compatibility
   private buffer: WebGLBuffer;
   private mappedPtr: ArrayBuffer | null = null;
   private size: number;
@@ -70,47 +72,54 @@ export class RingBuffer {
   private fenceSync: WebGLSync | null = null;
   private pendingFrames: PendingFrame[] = [];
 
+  // Fallback mode for environments without persistent mapping
+  private useFallbackMode: boolean = false;
+  private fallbackBuffer: Float32Array | null = null;
+
   // Constants
   private readonly ALIGNMENT = 256; // Cache line alignment
   private readonly FRAME_COUNT = 3; // Triple buffering
 
   constructor(options: RingBufferOptions) {
-    // Verify WebGL2 context
-    if (!(options.gl instanceof WebGL2RenderingContext)) {
-      throw new Error("RingBuffer requires WebGL2 context");
-    }
-
     this.gl = options.gl;
     this.size = options.size;
+
+    // Check if persistent mapping is available
+    const glAny = options.gl as any;
+    this.useFallbackMode = typeof glAny.mapBufferRange !== 'function';
 
     // Create buffer
     this.buffer = this.gl.createBuffer()!;
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffer);
 
-    // Allocate with persistent mapping
+    // Allocate buffer
     this.gl.bufferData(
       this.gl.ARRAY_BUFFER,
       this.size,
       options.usage ?? this.gl.DYNAMIC_DRAW
     );
 
-    // Map persistently (WebGL2 only)
-    const glAny = this.gl as any;
-    const MAP_WRITE_BIT = 0x0002;
-    const MAP_PERSISTENT_BIT = 0x0040;
-    const MAP_COHERENT_BIT = 0x0080;
+    if (this.useFallbackMode) {
+      // Fallback: Use regular Float32Array on CPU side
+      this.fallbackBuffer = new Float32Array(this.size / 4);
+    } else {
+      // Map persistently (WebGL2 only)
+      const MAP_WRITE_BIT = 0x0002;
+      const MAP_PERSISTENT_BIT = 0x0040;
+      const MAP_COHERENT_BIT = 0x0080;
 
-    const flags = MAP_WRITE_BIT | MAP_PERSISTENT_BIT | MAP_COHERENT_BIT;
+      const flags = MAP_WRITE_BIT | MAP_PERSISTENT_BIT | MAP_COHERENT_BIT;
 
-    this.mappedPtr = glAny.mapBufferRange(
-      this.gl.ARRAY_BUFFER,
-      0,
-      this.size,
-      flags
-    );
+      this.mappedPtr = glAny.mapBufferRange(
+        this.gl.ARRAY_BUFFER,
+        0,
+        this.size,
+        flags
+      );
 
-    if (!this.mappedPtr) {
-      throw new Error("Failed to map ring buffer persistently");
+      if (!this.mappedPtr) {
+        throw new Error("Failed to map ring buffer persistently");
+      }
     }
 
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
@@ -127,33 +136,44 @@ export class RingBuffer {
     // Align size to cache line
     const alignedSize = Math.ceil(byteSize / this.ALIGNMENT) * this.ALIGNMENT;
 
-    // Check if we need to wrap around
-    if (this.writeOffset + alignedSize > this.size) {
-      // Not enough space at end, wrap to start
-      const remaining = this.size - this.writeOffset;
-
-      if (remaining > 0) {
-        // Mark remaining space as padding by wrapping to start
-        this.writeOffset = 0;
-      }
-
-      // Check if we have space from start
-      if (alignedSize > this.readOffset && this.frameIndex > 0) {
-        // Would overwrite unread data
+    // In fallback mode, disable wraparound to avoid data fragmentation
+    // Instead, fail if we don't have contiguous space
+    if (this.useFallbackMode) {
+      if (this.writeOffset + alignedSize > this.size) {
+        // Not enough space, buffer is full for this frame
         return null;
       }
-    }
+    } else {
+      // Check if we need to wrap around (persistent mapping mode only)
+      if (this.writeOffset + alignedSize > this.size) {
+        // Not enough space at end, wrap to start
+        const remaining = this.size - this.writeOffset;
 
-    // Check for collision with read offset (buffer full)
-    if (this.writeOffset + alignedSize > this.readOffset && this.writeOffset < this.readOffset) {
-      return null; // Would overwrite unread data
+        if (remaining > 0) {
+          // Mark remaining space as padding by wrapping to start
+          this.writeOffset = 0;
+        }
+
+        // Check if we have space from start
+        if (alignedSize > this.readOffset && this.frameIndex > 0) {
+          // Would overwrite unread data
+          return null;
+        }
+      }
+
+      // Check for collision with read offset (buffer full)
+      if (this.writeOffset + alignedSize > this.readOffset && this.writeOffset < this.readOffset) {
+        return null; // Would overwrite unread data
+      }
     }
 
     // Create region view
     const region: RingBufferRegion = {
       offset: this.writeOffset,
       size: alignedSize,
-      view: new Float32Array(this.mappedPtr!, this.writeOffset / 4, byteSize / 4),
+      view: this.useFallbackMode
+        ? this.fallbackBuffer!.subarray(this.writeOffset / 4, this.writeOffset / 4 + byteSize / 4)
+        : new Float32Array(this.mappedPtr!, this.writeOffset / 4, byteSize / 4),
       frameIndex: this.frameIndex
     };
 
@@ -162,11 +182,47 @@ export class RingBuffer {
   }
 
   /**
+   * Flush data to GPU (call BEFORE rendering in fallback mode)
+   * Uploads CPU-side buffer to GPU for the current frame
+   */
+  flush(): void {
+    if (this.useFallbackMode && this.fallbackBuffer) {
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffer);
+
+      // Upload all data written this frame (contiguous from offset 0)
+      const dataSize = this.writeOffset;
+      if (dataSize > 0) {
+        const dataToUpload = this.fallbackBuffer.subarray(0, dataSize / 4);
+        this.gl.bufferSubData(this.gl.ARRAY_BUFFER, 0, dataToUpload);
+      }
+
+      this.gl.bindBuffer(this.gl.ARRAY_BUFFER, null);
+    }
+  }
+
+  /**
    * Advance to next frame (call after submitting all instance data)
    * Inserts fence synchronization and tracks in-flight frames
    */
   advanceFrame(): void {
     const glAny = this.gl as any;
+
+    // Note: In fallback mode, flush() should be called BEFORE rendering
+    // to upload data to GPU. advanceFrame() only handles frame tracking.
+
+    // Skip fence sync if not available (headless-gl doesn't support it)
+    if (!glAny.fenceSync) {
+      // Simple mode: just advance frame without synchronization
+      this.frameIndex++;
+      // In fallback mode, reset write offset each frame since we upload from offset 0
+      // In persistent mapping mode, write offset management is handled by triple buffering
+      if (this.useFallbackMode) {
+        this.writeOffset = 0;
+      } else if (this.writeOffset > this.size * 0.9) {
+        this.writeOffset = 0;
+      }
+      return;
+    }
 
     // Insert fence for current frame
     const SYNC_GPU_COMMANDS_COMPLETE = 0x9117;
@@ -198,6 +254,12 @@ export class RingBuffer {
 
     // Advance frame counter
     this.frameIndex++;
+
+    // In fallback mode, reset write offset for next frame
+    // (we always upload from offset 0 in fallback mode)
+    if (this.useFallbackMode) {
+      this.writeOffset = 0;
+    }
   }
 
   /**
