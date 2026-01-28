@@ -8,7 +8,7 @@ import {
   interpolateState,
   StateSmoother,
   type SmoothingConfig,
-} from "./interpolation";
+} from "../core/interpolation";
 
 // Mock entity state type for testing
 interface MockEntityState {
@@ -360,14 +360,14 @@ describe("interpolation", () => {
 
   describe("StateSmoother", () => {
     let smoother: StateSmoother;
-    let mockDateNow: ReturnType<typeof vi.fn>;
+    let mockDateNow: { mockReturnValue: (val: number) => void };
 
     beforeEach(() => {
       smoother = new StateSmoother();
-      mockDateNow = vi.fn();
+      mockDateNow = vi.fn() as any;
       const originalDateNow = Date.now;
       mockDateNow.mockReturnValue(1000);
-      global.Date.now = mockDateNow;
+      (global as any).Date.now = mockDateNow;
     });
 
     afterEach(() => {

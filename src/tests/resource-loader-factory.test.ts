@@ -4,7 +4,7 @@ import {
   createResourceLoader,
   Environment,
   ResourceLoaderFactoryOptions,
-} from "./resource-loader-factory";
+} from "../core/resource-loader-factory";
 import { NodeResourceLoader } from "../platforms/node/node-resource-loader";
 
 // Mock NodeResourceLoader

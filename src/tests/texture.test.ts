@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { Texture, ITexture } from "./texture";
+import { Texture, ITexture } from "../core/texture";
 
 describe("Texture", () => {
   let mockGL: WebGLRenderingContext;
