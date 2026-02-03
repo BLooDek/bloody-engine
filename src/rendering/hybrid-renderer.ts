@@ -26,7 +26,7 @@ import { Shader } from "../core/shader";
 import { InstancedRenderer, type InstanceData } from "./instanced-renderer";
 import { GPUBasedSpriteBatchRenderer, type SpriteQuadInstance } from "./batch-renderer";
 import { SHADERS_V4, SHADERS_V5 } from "../scene/scene";
-import type { GraphicsDevice } from "../core/grahpic-device";
+import type { GraphicsDevice } from "../core/graphics-device";
 
 /**
  * Hybrid Renderer Options

@@ -9,7 +9,7 @@
  * - UV rect selection for sprite sheets
  */
 
-import { GraphicsDevice } from "../core/grahpic-device";
+import { GraphicsDevice } from "../core/graphics-device";
 import {
   SpriteBatchRenderer,
   type SpriteQuadInstance,

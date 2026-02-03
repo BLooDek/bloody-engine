@@ -32,7 +32,7 @@ import fs from "fs";
 import { execSync } from "child_process";
 import path from "path";
 import { NodeRenderingContext } from "./platforms/node/node-context";
-import { GraphicsDevice } from "./core/grahpic-device";
+import { GraphicsDevice } from "./core/graphics-device";
 
 console.log(
   "🩸 Bloody Engine - Texture & Shader Demo + Projection Visualization + Resource Loader",
@@ -51,7 +51,7 @@ async function runResourceLoaderDemo() {
   const { ResourceLoaderFactory, Environment } =
     await import("./core/resource-loader-factory");
   const { createResourcePipeline } = await import("./core/resource-pipeline");
-  const { GraphicsDevice } = await import("./core/grahpic-device");
+  const { GraphicsDevice } = await import("./core/graphics-device");
   const { Shader } = await import("./core/shader");
   const { Texture } = await import("./core/texture");
   const { VertexBuffer } = await import("./core/buffer");
@@ -323,7 +323,11 @@ async function runSpriteBatchRendererV2Demo() {
   // Create SDL window for live rendering
   let sdlWindow: SDLWindow | null = null;
   try {
-    sdlWindow = new SDLWindow(WIDTH, HEIGHT, "Bloody Engine - V2 Sprites + Camera");
+    sdlWindow = new SDLWindow(
+      WIDTH,
+      HEIGHT,
+      "Bloody Engine - V2 Sprites + Camera",
+    );
   } catch (error) {
     console.warn("⚠ SDL window creation failed, running in headless mode");
   }
@@ -499,19 +503,19 @@ async function runSpriteBatchRendererV2Demo() {
     // Movement: WASD or Arrow keys
     // Note: Camera moves in screen space (Y-DOWN: increasing Y = down on screen)
     if (keys.has("w") || keys.has("arrowup")) {
-      camera.y -= moveAmount;  // Move camera up (decrease Y in screen space)
+      camera.y -= moveAmount; // Move camera up (decrease Y in screen space)
       cameraMoved = true;
     }
     if (keys.has("s") || keys.has("arrowdown")) {
-      camera.y += moveAmount;  // Move camera down (increase Y in screen space)
+      camera.y += moveAmount; // Move camera down (increase Y in screen space)
       cameraMoved = true;
     }
     if (keys.has("a") || keys.has("arrowleft")) {
-      camera.x -= moveAmount;  // Move camera left (decrease X)
+      camera.x -= moveAmount; // Move camera left (decrease X)
       cameraMoved = true;
     }
     if (keys.has("d") || keys.has("arrowright")) {
-      camera.x += moveAmount;  // Move camera right (increase X)
+      camera.x += moveAmount; // Move camera right (increase X)
       cameraMoved = true;
     }
 

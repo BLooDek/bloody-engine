@@ -8,7 +8,7 @@
  * - Batch loading multiple textures
  */
 
-import { GraphicsDevice } from "../core/grahpic-device";
+import { GraphicsDevice } from "../core/graphics-device";
 import { Texture } from "../core/texture";
 import { NodeTextureLoader, type TextureLoadResult } from "../platforms/node/node-texture-loader";
 import { Shader } from "../core/shader";

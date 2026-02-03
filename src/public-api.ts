@@ -1,5 +1,5 @@
 // Core graphics device
-export { GraphicsDevice } from "./core/grahpic-device";
+export { GraphicsDevice } from "./core/graphics-device";
 
 // Ticker system (unified game loop with fixed timestep)
 export { Ticker } from "./core/ticker";

@@ -7,7 +7,7 @@
  * - Smooth animation with moving sprites
  */
 
-import { GraphicsDevice } from "../core/grahpic-device";
+import { GraphicsDevice } from "../core/graphics-device";
 import { BatchRenderer, type QuadInstance } from "../rendering/batch-renderer";
 import { Texture } from "../core/texture";
 import { SCENE_CONFIG, SHADERS } from "../scene/scene";

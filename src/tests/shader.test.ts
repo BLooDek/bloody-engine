@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Shader } from "../core/shader";
-import { GraphicsDevice } from "../core/grahpic-device";
+import { GraphicsDevice } from "../core/graphics-device";
 
 // ============================================================================
 // Test Utilities

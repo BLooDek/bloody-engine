@@ -8,7 +8,7 @@
  * - Cross-platform resource loading (Browser/Node.js)
  */
 
-import { GraphicsDevice } from "../core/grahpic-device";
+import { GraphicsDevice } from "../core/graphics-device";
 import { Texture } from "../core/texture";
 import {
   ResourcePipeline,

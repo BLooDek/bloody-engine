@@ -8,7 +8,7 @@
 /// <reference types="vitest/globals" />
 
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
-import { GraphicsDevice } from "../core/grahpic-device";
+import { GraphicsDevice } from "../core/graphics-device";
 import { Shader } from "../core/shader";
 import { Texture } from "../core/texture";
 import { Camera } from "../rendering/camera";

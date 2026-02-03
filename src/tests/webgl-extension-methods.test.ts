@@ -8,7 +8,7 @@
 /// <reference types="vitest/globals" />
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { GraphicsDevice } from "../core/grahpic-device";
+import { GraphicsDevice } from "../core/graphics-device";
 
 describe("WebGL Extension Methods", () => {
   let graphicsDevice: GraphicsDevice;

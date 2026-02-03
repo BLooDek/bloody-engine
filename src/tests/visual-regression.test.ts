@@ -12,7 +12,7 @@
 
 /// <reference types="vitest/globals" />
 
-import { GraphicsDevice } from "../core/grahpic-device";
+import { GraphicsDevice } from "../core/graphics-device";
 import { Shader } from "../core/shader";
 import { Texture } from "../core/texture";
 import { VertexBuffer } from "../core/buffer";
